@@ -22,6 +22,7 @@ class StoryElementLibrary:
             model_name=model_name,
             streaming=False
         )
+        #['Guests arrive at the hotel on a stormy night', 'The protagonist discovers a mysterious room with a disturbing atmosphere', 'A ghostly apparition is spotted in the hallway', 'The guests start to hear strange noises and whispers', "The protagonist uncovers a dark secret about the hotel's past", "The hotel's ghostly presence becomes more aggressive and menacing", 'The protagonist and remaining guests must find a way to escape the hotel alive', 'The protagonist confronts the source of the haunting and a terrifying truth is revealed', 'The guests escape the hotel but are left traumatized by their experience', 'The hotel is left abandoned and rumored to be haunted forever', "The protagonist is left to wonder if they truly escaped the hotel's grasp"]
         
         # Basic story element categories
         self.plot_twists = {
@@ -37,39 +38,16 @@ class StoryElementLibrary:
                 "A prophecy/prediction is fulfilled but in an unexpected way",
                 "A character's true identity is revealed, changing the story's context"
             ],
-            "ghost": [
-                "The ghost is actually protecting the protagonist from a greater evil",
-                "The protagonist discovers they've been dead the whole time",
-                "The haunting is revealed to be a hoax by a living person with ulterior motives",
-                "The ghost is actually from the future, not the past",
-                "Multiple spirits are revealed to be different aspects of the same person",
-                "The supposed ghost is actually a living person trapped between dimensions",
-                "The protagonist discovers they can see ghosts due to a near-death experience in their forgotten past",
-                "The ghost is revealed to be a manifestation of the protagonist's guilt or trauma",
-                "The haunting is revealed to be caused by an object, not a location",
-                "The ghost is revealed to be the protagonist from another timeline"
-            ],
-            "sci-fi": [
-                "Technology intended to help humanity is revealed to have a sinister purpose",
-                "The alien species is revealed to be evolved humans from the future",
-                "The protagonist discovers they are a clone/android/synthetic human",
-                "The apparently distant planet is revealed to be future Earth",
-                "The antagonist is revealed to be the protagonist from an alternate timeline",
-                "The technology is revealed to be powered by human consciousness/souls",
-                "The mission is revealed to be a simulation/experiment",
-                "The seemingly benevolent AI is revealed to have its own agenda",
-                "The disease/phenomenon is revealed to be caused by time travel",
-                "The corporation is revealed to be controlled by a non-human intelligence"
-            ]
+           
         }
         
         # Initialize the plot options prompt
         self.plot_options_prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a creative writing assistant that specializes in providing plot options "
-                     "based on a story outline. Generate 10 distinct and creative plot options that would work well "
-                     "with the provided outline. Each plot option should be a complete plot point that could be "
-                     "inserted into the story. Format your response as a JSON array of strings, where each string "
-                     "is a single plot option. Make each option distinct and creative."),
+                    "based on a story outline. Generate 10 distinct and creative plot options that would work well "
+                    "with the provided outline. Each plot option should be a complete plot point that could be "
+                    "inserted into the story. Format your response as a JSON array of strings, where each string "
+                    "is a single plot option. Make each option distinct and creative."),
             ("human", "Story Type: {story_type}\nOutline: {outline}\n\n"
                     "Please provide 10 engaging plot options that could enhance this story.")
         ])
