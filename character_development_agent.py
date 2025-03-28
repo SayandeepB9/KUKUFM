@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
+from llm_api import llm_api
 
 
 class CharacterQuery(BaseModel):
@@ -19,7 +19,7 @@ class CharacterQuery(BaseModel):
 
 class CharacterDevelopmentAgent:
     def __init__(self, model, api_key):
-        self.llm = ChatGroq(model=model, api_key=api_key)
+        self.llm = llm_api(model=model, api_key=api_key)
         self.system_prompt = """You are an expert at developing story characters.
         
         Given a plot, generate detailed descriptions and roles for 3-5 distinctive indian characters in the indian background in the story.

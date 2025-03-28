@@ -1,10 +1,10 @@
-from langchain_groq import ChatGroq
 from langchain.prompts import ChatPromptTemplate
 import os
 import json
 import datetime
 import random
 from typing import List, Dict, Any
+from llm_api import llm_api
 
 class StoryElementLibrary:
     """Library of story elements that provides plot options based on existing outlines."""
@@ -17,9 +17,10 @@ class StoryElementLibrary:
         elif "GROQ_API_KEY" not in os.environ:
             raise ValueError("GROQ API key must be provided either as an argument or as an environment variable")
         
-        # Initialize LLM
-        self.llm = ChatGroq(
-            model_name=model_name,
+        # Initialize LLM using the llm_api function
+        self.llm = llm_api(
+            model=model_name,
+            api_key=api_key,
             streaming=False
         )
         
