@@ -60,9 +60,9 @@ class StorySplitterAgent:
             "characters": characters,
             "num_episodes": num_episodes,
         }
-        split_story = self.story_splitter.invoke(input_data)
+        split_story_ = self.story_splitter.invoke(input_data)
         print("---GENERATED EPISODES ---")
-        for episode in split_story.episodes:
+        for episode in split_story_.episodes:
             print(f"Episode {episode.number}: {episode.title}")
             print("Content:")
             print(episode.content)
@@ -70,7 +70,7 @@ class StorySplitterAgent:
                 print("Cliffhanger:")
                 print(episode.cliffhanger)
             print("------")
-        return split_story.episodes
+        return split_story_.episodes
 
 
 if __name__ == "__main__":

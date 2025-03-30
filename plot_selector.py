@@ -216,7 +216,6 @@ def extract_outline_from_input(input_text):
     if isinstance(input_text, list):
         return input_text
     
-    # Try to parse as JSON
     try:
         parsed = json.loads(input_text)
         if isinstance(parsed, list):
@@ -224,7 +223,6 @@ def extract_outline_from_input(input_text):
     except:
         pass
     
-    # Try to parse as string representation of list
     try:
         import ast
         parsed = ast.literal_eval(input_text)
