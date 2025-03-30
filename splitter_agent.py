@@ -41,7 +41,11 @@ class StorySplitterAgent:
             "and a dramatic cliffhanger that leaves the reader eager to continue, except for the final episode. "
             "The final episode should have an empty cliffhanger field."
         )
-        self.structured_llm_split = self.llm.with_structured_output(SplitStoryQuery)
+        
+        # Modified: Use a simpler approach to avoid function calling issues
+        self.llm_regular = self.llm
+        
+        # Create a simpler prompt without relying on structured output
         self.split_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", self.system_prompt),
@@ -52,15 +56,18 @@ class StorySplitterAgent:
                  "Plot Points: {plots}\n"
                  "Characters: {characters}\n\n"
                  "For each episode, please provide:\n"
-                 " - 'number': The episode sequence number starting at 1.\n"
-                 " - 'title': A catchy title that captures the episode's essence.\n"
-                 " - 'content': A detailed narrative that develops the plot and integrates the given outline, plot points, and character details.\n"
-                 " - 'cliffhanger': A dramatic cliffhanger ending for all episodes except the final one. The final episode should have an empty cliffhanger.\n\n"
-                 "Ensure the episodes connect smoothly from one to the next."
+                 " - Episode Number: (the sequence number starting at 1)\n" 
+                 " - Episode Title: (a catchy title that captures the essence)\n"
+                 " - Episode Content: (a detailed narrative developing the plot)\n"
+                 " - Cliffhanger: (a dramatic ending for all episodes except the final one)\n\n"
+                 "Format your response as a series of episodes with clearly labeled NUMBER, TITLE, CONTENT, and CLIFFHANGER sections.\n\n"
+                 "Ensure the episodes connect smoothly from one to the next. The final episode should NOT have a cliffhanger."
                 ),
             ]
         )
-        self.story_splitter = self.split_prompt | self.structured_llm_split
+        
+        # Create the chain without structured output
+        self.story_splitter = self.split_prompt | self.llm_regular
 
     def split_story(self, outline: str, plots: List[str], characters: List[dict], num_episodes: int = 5):
         input_data = {
@@ -69,9 +76,16 @@ class StorySplitterAgent:
             "characters": characters,
             "num_episodes": num_episodes,
         }
-        split_story_ = self.story_splitter.invoke(input_data)
+        
+        # Get the raw response and parse it
+        result = self.story_splitter.invoke(input_data)
+        response_text = result.content if hasattr(result, 'content') else str(result)
+        
+        # Parse the response into episode objects
+        episodes = self._parse_episodes(response_text, num_episodes)
+        
         print("---GENERATED EPISODES ---")
-        for episode in split_story_.episodes:
+        for episode in episodes:
             print(f"Episode {episode.number}: {episode.title}")
             print("Content:")
             print(episode.content)
@@ -79,7 +93,58 @@ class StorySplitterAgent:
                 print("Cliffhanger:")
                 print(episode.cliffhanger)
             print("------")
-        return split_story_.episodes
+        
+        return episodes
+    
+    def _parse_episodes(self, text: str, num_episodes: int) -> List[Episode]:
+        """Parse the LLM response into Episode objects."""
+        episodes = []
+        
+        # Split the text into episode chunks
+        import re
+        episode_chunks = re.split(r'Episode\s+\d+:|NUMBER:\s*\d+', text)[1:]  # Skip the first split which is empty
+        
+        # If we didn't get episode chunks, try alternative parsing
+        if not episode_chunks and "EPISODE" in text.upper():
+            episode_chunks = re.split(r'EPISODE\s+\d+:', text)[1:]
+        
+        # Process each chunk
+        for i, chunk in enumerate(episode_chunks[:num_episodes], 1):
+            # Extract the title
+            title_match = re.search(r'(?:TITLE:|Episode Title:)\s*(.*?)(?:\n|$)', chunk, re.IGNORECASE)
+            title = title_match.group(1).strip() if title_match else f"Episode {i}"
+            
+            # Extract the content
+            content_match = re.search(r'(?:CONTENT:|Episode Content:)\s*(.*?)(?:(?:CLIFFHANGER:|Cliffhanger:)|$)', 
+                                    chunk, re.IGNORECASE | re.DOTALL)
+            content = content_match.group(1).strip() if content_match else chunk.strip()
+            
+            # Extract the cliffhanger if any
+            cliffhanger_match = re.search(r'(?:CLIFFHANGER:|Cliffhanger:)\s*(.*?)(?:$)', chunk, re.IGNORECASE | re.DOTALL)
+            cliffhanger = cliffhanger_match.group(1).strip() if cliffhanger_match else ""
+            
+            # Create and add the episode
+            episode = Episode(
+                number=i,
+                title=title,
+                content=content,
+                cliffhanger="" if i == num_episodes else cliffhanger  # Ensure last episode has no cliffhanger
+            )
+            episodes.append(episode)
+        
+        # If we couldn't parse properly, create basic episodes
+        if not episodes:
+            print("Warning: Could not parse episodes properly. Creating default episodes.")
+            for i in range(1, num_episodes + 1):
+                episode = Episode(
+                    number=i,
+                    title=f"Episode {i}",
+                    content=f"Content for episode {i}. " + text[:min(100, len(text))],
+                    cliffhanger="" if i == num_episodes else "To be continued..."
+                )
+                episodes.append(episode)
+        
+        return episodes
 
 
 if __name__ == "__main__":

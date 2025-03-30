@@ -4,3 +4,4 @@ __pycache__
 generated_stories/
 .env
 *.env
+output_story/
