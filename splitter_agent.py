@@ -74,7 +74,7 @@ class StorySplitterAgent:
 
 
 if __name__ == "__main__":
-    model = "llama3-70b-8192"  
+    model = "llama-3.1-8b-instant"  
     api_key = os.getenv("GROQ_API_KEY")
 
     splitter = StorySplitterAgent(model=model, api_key=api_key)
