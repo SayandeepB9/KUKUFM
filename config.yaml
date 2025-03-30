@@ -1,4 +1,3 @@
-
 # Model configuration
 models:
   default: "llama3-70b-8192"
@@ -6,11 +5,17 @@ models:
   character_development: "llama-3.1-8b-instant"
   story_splitting: "llama3-70b-8192"
   plot_selection: "llama3-70b-8192"
+  # OpenAI alternatives
+  openai_default: "gpt-4o-mini"
+  openai_fast: "gpt-4o-mini"
 
 # API configuration (these will be overridden by environment variables if present)
 api_keys:
   groq: ""  # Will use GROQ_API_KEY from .env
   openai: "" # Will use OPENAI_API_KEY from .env
+  
+# Default provider to use when both API keys are available
+preferred_provider: "groq"  # Options: "groq", "openai"
   
 # General settings
 settings:
