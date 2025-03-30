@@ -2,17 +2,22 @@ from typing import List, Literal
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_groq import ChatGroq
-from llm_api import llm_api
+from llm_api import llm_api, get_model_from_config
+import os
 
 class DialogueOutput(BaseModel):
+    """Generated dialogue script for an episode."""
     dialogue: str = Field(..., description="The generated dialogue script for the episode.")
-
+    
     class Config:
-        extra = "allow"
+        # This is important for OpenAI models
+        extra = "forbid"
 
 class DialogueAgent:
     def __init__(self, api_key=None):
-        self.llm = llm_api(api_key=api_key, model_type="dialogue_generation")
+        # Get the model from config
+        self.model_type = "dialogue_generation"
+        self.llm = llm_api(api_key=api_key, model_type=self.model_type)
         
         self.system_prompt = (
             "You are an expert creative writer tasked with generating dialogues for an episode of a story. "
@@ -22,8 +27,20 @@ class DialogueAgent:
             "Ensure that each character's voice is distinct and that the conversation flows smoothly."
         )
         
-        # Use DialogueOutput as the response schema.
-        self.structured_llm_dialogue = self.llm.with_structured_output(DialogueOutput)
+        # Get the selected model name from config
+        model_name = get_model_from_config(self.model_type)
+        
+        # Check if we're using an OpenAI model and use proper method
+        if 'gpt' in model_name.lower():
+            # Use function_calling method for OpenAI models to avoid schema validation issues
+            self.structured_llm_dialogue = self.llm.with_structured_output(
+                DialogueOutput,
+                method="function_calling"
+            )
+        else:
+            # For non-OpenAI models like Groq's Llama
+            self.structured_llm_dialogue = self.llm.with_structured_output(DialogueOutput)
+            
         self.dialogue_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", self.system_prompt),
@@ -46,14 +63,37 @@ class DialogueAgent:
             "storyline": storyline,
             "characters": characters,
         }
-        dialogue_output = self.dialogue_generator.invoke(input_data)
-        print("\n--- GENERATED DIALOGUE ---")
-        print(dialogue_output.dialogue)
-        return dialogue_output.dialogue
+        
+        try:
+            dialogue_output = self.dialogue_generator.invoke(input_data)
+            print("\n--- GENERATED DIALOGUE ---")
+            print(dialogue_output.dialogue)
+            return dialogue_output.dialogue
+        except Exception as e:
+            print(f"Error generating dialogue: {str(e)}")
+            print("Falling back to raw generation without structured output...")
+            
+            # Fallback to raw generation
+            fallback_prompt = ChatPromptTemplate.from_messages([
+                ("system", self.system_prompt),
+                ("human", 
+                 "Generate a dialogue script for the following episode.\n\n"
+                 f"Story Type: {story_type}\n"
+                 f"Episode Storyline: {storyline}\n"
+                 f"Characters: {str(characters)}\n\n"
+                 "Please produce an engaging and coherent dialogue script."
+                )
+            ])
+            
+            fallback_chain = fallback_prompt | self.llm
+            response = fallback_chain.invoke({})
+            
+            print("\n--- GENERATED DIALOGUE (FALLBACK METHOD) ---")
+            print(response.content)
+            return response.content
 
 # Example usage
 if __name__ == "__main__":
-
     agent = DialogueAgent()
     
     # Example episode storyline

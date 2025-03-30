@@ -4,7 +4,7 @@ import json
 import datetime
 import random
 from typing import List, Dict, Any
-from llm_api import llm_api
+from llm_api import llm_api, get_model_from_config
 import yaml
 
 class StoryElementLibrary:
@@ -12,10 +12,14 @@ class StoryElementLibrary:
     
     def __init__(self, api_key=None):
         """Initialize the story element library."""
+        # Get the model type and name from config
+        self.model_type = "plot_selection"
+        self.model_name = get_model_from_config(self.model_type)
+        
         # Initialize LLM using the llm_api function
         self.llm = llm_api(
             api_key=api_key,
-            model_type="plot_selection",
+            model_type=self.model_type,
             streaming=False
         )
         
@@ -23,15 +27,24 @@ class StoryElementLibrary:
         self.plot_twists = self._load_plot_twists()
         
         # Initialize the plot options prompt
+        self.system_prompt = (
+            "You are a creative writing assistant that specializes in providing plot options "
+            "based on a story outline. Generate 10 distinct and creative plot options that would work well "
+            "with the provided outline. Each plot option should be a complete plot point that could be "
+            "inserted into the story. Format your response as a JSON array of strings, where each string "
+            "is a single plot option. Make each option distinct and creative. Consider the story type "
+            "and outline themes when generating plot options."
+        )
+        
+        self.human_prompt = (
+            "Story Type: {story_type}\nOutline: {outline}\n\n"
+            "Please provide 10 engaging plot options that could enhance this story. "
+            "Return your response as a JSON array of strings."
+        )
+        
         self.plot_options_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a creative writing assistant that specializes in providing plot options "
-                     "based on a story outline. Generate 10 distinct and creative plot options that would work well "
-                     "with the provided outline. Each plot option should be a complete plot point that could be "
-                     "inserted into the story. Format your response as a JSON array of strings, where each string "
-                     "is a single plot option. Make each option distinct and creative. Consider the story type "
-                     "and outline themes when generating plot options."),
-            ("human", "Story Type: {story_type}\nOutline: {outline}\n\n"
-                    "Please provide 10 engaging plot options that could enhance this story.")
+            ("system", self.system_prompt),
+            ("human", self.human_prompt)
         ])
         
         self.plot_options_chain = self.plot_options_prompt | self.llm
@@ -95,10 +108,18 @@ class StoryElementLibrary:
         try:
             print("\nGenerating plot options... (this may take a moment)\n")
             
-            response = self.plot_options_chain.invoke({
-                "story_type": story_type,
-                "outline": outline
-            })
+            # For GPT models, try using a different approach with clearer JSON formatting
+            if 'gpt' in self.model_name.lower():
+                response = self.llm.invoke(
+                    f"Generate 10 distinct and creative plot options for a {story_type} story with this outline: {outline}. "
+                    "Format your response ONLY as a JSON array of strings like this: [\"Option 1\", \"Option 2\", ...]. "
+                    "Do not include any other text or explanation in your response."
+                )
+            else:
+                response = self.plot_options_chain.invoke({
+                    "story_type": story_type,
+                    "outline": outline
+                })
             
             result_text = response.content if hasattr(response, 'content') else str(response)
             
