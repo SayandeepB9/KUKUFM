@@ -18,8 +18,8 @@ class OutlineQuery(BaseModel):
 
 
 class OutlineGenerator:
-    def __init__(self, model, api_key):
-        self.llm = llm_api(model=model, api_key=api_key)
+    def __init__(self, api_key=None):
+        self.llm = llm_api(api_key=api_key, model_type="outline_generation")
         self.system_prompt = """You are an expert at generating detailed story outlines.
         Given a topic, generate a list of the main events that will happen in the story.
         For each story, you should provide at least 5-7 key events that form a coherent narrative.
@@ -43,9 +43,7 @@ class OutlineGenerator:
 
 
 if __name__ == "__main__":
-    model = "llama-3.1-8b-instant"  
-    api_key = "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" 
-    generator = OutlineGenerator(model=model, api_key=api_key)
+    generator = OutlineGenerator()
     topic = "A horror story in a haunted hotel"
     events = generator.generate_outline(topic)
     print("Generated Outline:", events)
