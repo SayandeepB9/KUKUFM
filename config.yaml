@@ -1,11 +1,10 @@
-
-# Model configuration
 models:
   default: "llama3-70b-8192"
   outline_generation: "llama-3.1-8b-instant"
   character_development: "llama-3.1-8b-instant"
   story_splitting: "llama3-70b-8192"
   plot_selection: "llama3-70b-8192"
+  dialogue_generation: "llama3-70b-8192"
 
 # API configuration (these will be overridden by environment variables if present)
 api_keys:
