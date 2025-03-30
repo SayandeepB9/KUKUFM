@@ -4,7 +4,7 @@ load_dotenv()
 from typing import List
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
+from llm_api import llm_api
 
 class Episode(BaseModel):
     number: int = Field(..., description="The sequential number of the episode.")
@@ -23,8 +23,8 @@ class SplitStoryQuery(BaseModel):
     episodes: List[Episode] = Field(default_factory=list, description="The generated episodes that model the long story.")
 
 class StorySplitterAgent:
-    def __init__(self, model: str, api_key: str):
-        self.llm = ChatGroq(model=model, api_key=api_key)
+    def __init__(self, api_key=None):
+        self.llm = llm_api(api_key=api_key, model_type="story_splitting")
         self.system_prompt = (
             "You are a master storyteller. Your task is to split a long narrative into interconnected episodes. "
             "Given an overall outline, specific plot points, and detailed character descriptions, generate a long, engaging story divided into episodes. "
@@ -74,10 +74,7 @@ class StorySplitterAgent:
 
 
 if __name__ == "__main__":
-    model = "llama3-70b-8192"  
-    api_key = os.getenv("GROQ_API_KEY")
-
-    splitter = StorySplitterAgent(model=model, api_key=api_key)
+    splitter = StorySplitterAgent()
     outline_text = "A mysterious struggle between light and dark unfolds in a haunted city where supernatural forces battle unseen foes."
     plots_list = [
         "The protagonists discover a hidden curse that links their past.",
