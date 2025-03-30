@@ -26,7 +26,7 @@ def load_config():
         print(f"Error loading config: {e}")
         return None
 
-# Custom JSON encoder to handle Episode objects
+# Custom JSON encoder to handle Episode objects and LengthenedEpisode objects
 class StoryJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Episode):
@@ -36,28 +36,41 @@ class StoryJSONEncoder(json.JSONEncoder):
                 "content": obj.content,
                 "cliffhanger": obj.cliffhanger
             }
+        # Handle LengthenedEpisode objects
+        elif hasattr(obj, 'lengthened_content'):
+            return {
+                "lengthened_content": obj.lengthened_content,
+                "engagement_points": getattr(obj, 'engagement_points', []),
+                "summary": getattr(obj, 'summary', "")
+            }
         # Let the base class handle other types or raise TypeError
         return json.JSONEncoder.default(self, obj)
 
-def save_story(story_data, output_dir="generated_stories"):
-    """Save generated story to JSON and text files"""
-    # Create output directory if it doesn't exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
-    # Create timestamp for unique filenames
+def create_story_directory(topic):
+    """Create a unique directory for this story based on name and timestamp"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Sanitize story title for directory name
+    title_slug = "".join(c if c.isalnum() else "_" for c in topic[:30])
+    story_dir = f"stories/{title_slug}_{timestamp}"
     
-    # Sanitize story title for filename
-    title_slug = "".join(c if c.isalnum() else "_" for c in story_data["topic"][:30])
-    base_filename = f"{output_dir}/{timestamp}_{title_slug}"
+    # Create directories
+    if not os.path.exists(story_dir):
+        os.makedirs(story_dir)
     
+    # Create subdirectories for different outputs
+    os.makedirs(f"{story_dir}/episodes", exist_ok=True)
+    os.makedirs(f"{story_dir}/dialogue", exist_ok=True)
+    
+    return story_dir
+
+def save_story(story_data, story_dir):
+    """Save generated story to JSON and text files in the story directory"""
     # Save complete story data as JSON using custom encoder
-    with open(f"{base_filename}.json", 'w', encoding='utf-8') as f:
+    with open(f"{story_dir}/story_data.json", 'w', encoding='utf-8') as f:
         json.dump(story_data, f, indent=2, ensure_ascii=False, cls=StoryJSONEncoder)
         
     # Save readable story text
-    with open(f"{base_filename}.txt", 'w', encoding='utf-8') as f:
+    with open(f"{story_dir}/story_details.md", 'w', encoding='utf-8') as f:
         f.write(f"# {story_data['topic']}\n\n")
         
         f.write("## Story Outline\n")
@@ -88,13 +101,57 @@ def save_story(story_data, output_dir="generated_stories"):
             if episode.cliffhanger:
                 f.write(f"**Cliffhanger:** {episode.cliffhanger}\n\n")
     
-    print(f"\nStory saved to {base_filename}.json and {base_filename}.txt")
-    return base_filename
+    print(f"\nStory data saved to {story_dir}/story_data.json and {story_dir}/story_details.md")
+    return story_dir
 
+def save_final_story(story_data, story_dir):
+    """Save the final story with dialogues to a single file for publishing"""
+    # Write the final story to a file
+    filename = f"{story_dir}/final_story.md"
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        # Title and intro
+        f.write(f"# {story_data['topic']}\n\n")
+        
+        # Introduction to the story - combine the outline points
+        f.write("## Introduction\n\n")
+        outline_text = " ".join(story_data['outline'])
+        f.write(f"{outline_text}\n\n")
+        
+        # Characters introduction
+        f.write("## Characters\n\n")
+        for char in story_data['characters']:
+            f.write(f"**{char['name']}** ({char['role']}): {char['description']}\n\n")
+        
+        # Episodes with dialogues
+        f.write("## Story\n\n")
+        
+        for episode in story_data['episodes']:
+            episode_num = episode.number
+            
+            # Get dialogue for this episode
+            dialogue = story_data.get('dialogue', {}).get(episode_num)
+            
+            if dialogue:
+                f.write(f"### Episode {episode_num}: {episode.title}\n\n")
+                f.write(f"{dialogue}\n\n")
+                
+                # Add a separator between episodes
+                if episode_num < len(story_data['episodes']):
+                    f.write("---\n\n")
+        
+        # Add metadata at the end
+        f.write(f"\n\n*Generated on {datetime.now().strftime('%Y-%m-%d')}*\n")
+    
+    print(f"\nFinal story saved to {filename}")
+    return filename
 
 def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     """Run the complete story generation pipeline"""
     print(f"\n=== Generating story for topic: '{topic}' ===\n")
+    
+    # Create a unique directory for this story
+    story_dir = create_story_directory(topic)
     
     # Step 1: Generate outline
     print("Step 1/6: Generating story outline...")
@@ -132,35 +189,36 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     lengthener = EpisodeLengtheningAgent()
     enhanced_episodes = {}
     
-    # Process only the first episode for demonstration purposes (to keep runtime reasonable)
-    # In production, you might want to process all or a subset of episodes
-    if episodes and len(episodes) > 0:
-        first_episode = episodes[0]
-        print(f"Enhancing episode {first_episode.number}: {first_episode.title}...")
+    previous_episodes_summary = ""
+    previous_cliffhanger = ""
+    
+    for i, episode in enumerate(episodes):
+        print(f"Enhancing episode {episode.number}: {episode.title}...")
         
-        previous_episodes_summary = ""  # First episode has no previous episodes
-        previous_cliffhanger = ""
-        
-        # Process the first episode
+        # Process each episode
         enhanced = lengthener.lengthen_episode(
-            episode_title=first_episode.title,
-            episode_number=first_episode.number,
-            episode_outline=first_episode.content,
+            episode_title=episode.title,
+            episode_number=episode.number,
+            episode_outline=episode.content,
             previous_episodes_summary=previous_episodes_summary,
             previous_cliffhanger=previous_cliffhanger,
-            include_cliffhanger=bool(first_episode.cliffhanger)
+            include_cliffhanger=bool(episode.cliffhanger)
         )
         
         # Store the enhanced episode
-        enhanced_episodes[first_episode.number] = enhanced
+        enhanced_episodes[episode.number] = enhanced
         
-        # Save to file
-        output_dir = "output_story"
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            
-        file_name = f"Episode_{first_episode.number}_{first_episode.title.replace(' ', '_')}.md"
-        output_path = os.path.join(output_dir, file_name)
+        # Update previous episode summary for next iteration
+        if hasattr(enhanced, 'summary'):
+            previous_episodes_summary += enhanced.summary + " "
+        else:
+            previous_episodes_summary += f"Episode {episode.number}: {episode.title}. "
+        
+        previous_cliffhanger = episode.cliffhanger if episode.cliffhanger else ""
+        
+        # Save to file within the story directory
+        file_name = f"Episode_{episode.number}_{episode.title.replace(' ', '_')}.md"
+        output_path = os.path.join(story_dir, "episodes", file_name)
         lengthener.save_episode_to_file(enhanced, output_path)
     
     # Step 6: Generate dialogue
@@ -168,22 +226,46 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     dialogue_agent = DialogueAgent()
     dialogues = {}
     
-    # Again, just process the first episode for demonstration
-    if episodes and len(episodes) > 0:
-        first_episode = episodes[0]
-        print(f"Generating dialogue for episode {first_episode.number}: {first_episode.title}...")
+    # Process all episodes for dialogue generation
+    for episode in episodes:
+        print(f"Generating dialogue for episode {episode.number}: {episode.title}...")
+        
+        # Use enhanced content if available
+        enhanced_episode = enhanced_episodes.get(episode.number)
+        if enhanced_episode and hasattr(enhanced_episode, 'lengthened_content'):
+            print("Using enhanced content for dialogue generation...")
+            episode_content = enhanced_episode.lengthened_content
+        else:
+            episode_content = episode.content
         
         # Generate dialogue
         dialogue = dialogue_agent.generate_dialogue(
             story_type=story_type,
-            storyline=first_episode.content,
+            storyline=episode_content,
             characters=characters
         )
         
-        # Store the dialogue
-        dialogues[first_episode.number] = dialogue
+        # Store the dialogue and save to separate file 
+        dialogues[episode.number] = dialogue
+        
+        # Save dialogue to separate file
+        dialogue_file = os.path.join(story_dir, "dialogue", f"dialogue_episode_{episode.number}.md")
+        with open(dialogue_file, 'w', encoding='utf-8') as f:
+            f.write(f"# Dialogue for Episode {episode.number}: {episode.title}\n\n")
+            f.write(dialogue)
     
-    # Create story data structure
+    # Create story data structure - convert enhanced_episodes to serializable format
+    serializable_enhanced_episodes = {}
+    for num, ep in enhanced_episodes.items():
+        if hasattr(ep, 'lengthened_content'):
+            serializable_enhanced_episodes[num] = {
+                "lengthened_content": ep.lengthened_content,
+                "engagement_points": getattr(ep, 'engagement_points', []),
+                "summary": getattr(ep, 'summary', "")
+            }
+        else:
+            serializable_enhanced_episodes[num] = ep
+    
     story_data = {
         "topic": topic,
         "story_type": story_type,
@@ -191,21 +273,24 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
         "characters": characters,
         "plots": selected_plots,
         "episodes": episodes,
-        "enhanced_episodes": enhanced_episodes,
+        "enhanced_episodes": serializable_enhanced_episodes,
         "dialogue": dialogues,
         "generated_at": datetime.now().isoformat()
     }
     
-    # Save the story
-    save_story(story_data)
+    # Save all story data to the story directory
+    save_story(story_data, story_dir)
+    
+    # Save the final publishable story
+    final_story_file = save_final_story(story_data, story_dir)
     
     print("\n=== Story generation complete! ===")
     print(f"Generated {len(episodes)} episodes with {len(characters)} characters")
     print(f"Enhanced {len(enhanced_episodes)} episodes with detailed content")
     print(f"Generated dialogue for {len(dialogues)} episodes")
+    print(f"All story files saved to directory: {story_dir}")
     
-    return story_data
-
+    return story_data, story_dir
 
 def main():
     """Main function to run the story generation pipeline"""
@@ -232,9 +317,12 @@ def main():
     
     # Generate the story
     try:
-        generate_story_pipeline(args.topic, args.episodes, args.type)
+        story_data, story_dir = generate_story_pipeline(args.topic, args.episodes, args.type)
+        # Return both story data and directory for potential further processing
     except Exception as e:
         print(f"Error generating story: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

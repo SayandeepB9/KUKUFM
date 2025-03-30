@@ -1,11 +1,11 @@
 models:
-  default: "llama3-70b-8192"
-  outline_generation: "llama-3.1-8b-instant"
-  character_development: "llama-3.1-8b-instant"
-  story_splitting: "llama3-70b-8192"
-  plot_selection: "llama3-70b-8192"
-  "story_enhancement": "llama3-70b-8192"
-  dialogue_generation: "llama3-70b-8192"
+  default: "gpt-4o-mini"
+  outline_generation: "gpt-4o-mini"
+  character_development: "gpt-4o-mini"
+  story_splitting: "gpt-4o-mini"
+  plot_selection: "gpt-4o-mini"
+  "story_enhancement": "gpt-4o-mini"
+  dialogue_generation: "gpt-4o-mini"
 
 # API configuration (these will be overridden by environment variables if present)
 api_keys:

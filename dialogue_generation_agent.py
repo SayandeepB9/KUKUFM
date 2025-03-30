@@ -23,8 +23,13 @@ class DialogueAgent:
             "You are an expert creative writer tasked with generating dialogues for an episode of a story. "
             "The generated dialogue should be coherent, engaging, and interwoven with the provided episode storyline and character details. "
             "If the story type is 'novel', provide ample narration by a narrator along with dialogues; "
-            "if the story type is 'drama', focus on dynamic dialogue exchanges between the characters with less narration. "
+            "To fit in everything in 'novel' style, you can even use aside, monologue, or soliloquy. "
+            "if the story type is 'drama', focus on dynamic dialogue exchanges between the characters along with narration. "
             "Ensure that each character's voice is distinct and that the conversation flows smoothly."
+            "Ensure that not even a single part of the original story is skipped or missed in the final script."
+            "Since we are adding dialogues to the story, the final script should be much more longer than the original story."
+            "Note that you are generating the final script for an episode, not just dialogues."
+            "Ensuring that the final script is very long, interesting and engaging is the key."
         )
         
         # Get the selected model name from config
@@ -51,7 +56,7 @@ class DialogueAgent:
                  "Characters: {characters}\n\n"
                  "Please produce an engaging and coherent dialogue script as per the given style. "
                  "If the style is 'novel', the narrator's voice should be prominent alongside character dialogues. "
-                 "If the style is 'drama', focus on the conversation between characters with minimal narration."
+                 "If the style is 'drama', focus on the conversation between characters with narration."
                 )
             ]
         )
