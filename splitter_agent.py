@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv  
 load_dotenv()
-from typing import List
+from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from llm_api import llm_api
@@ -11,6 +11,15 @@ class Episode(BaseModel):
     title: str = Field(..., description="A short title capturing the main idea of the episode.")
     content: str = Field(..., description="A detailed narrative of the episode, developing and advancing the plot.")
     cliffhanger: str = Field("", description="For every episode except the final one, provide a dramatic cliffhanger. For the final episode, leave this empty.")
+    
+    def to_dict(self):
+        """Return a dictionary representation of the episode for JSON serialization"""
+        return {
+            "number": self.number,
+            "title": self.title,
+            "content": self.content,
+            "cliffhanger": self.cliffhanger
+        }
 
 class SplitStoryQuery(BaseModel):
     outline: str = Field(..., description="A general overview of the story's theme and direction.")

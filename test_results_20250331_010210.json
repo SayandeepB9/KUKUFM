@@ -1,0 +1,72 @@
+{
+  "test_results": {
+    "api_keys": true,
+    "llm_api": true,
+    "outline_generator": true,
+    "character_development": true,
+    "plot_selector": true,
+    "story_splitter": true
+  },
+  "topic": "A mystery in an ancient library",
+  "outline": [
+    "The protagonist receives a cryptic letter inviting them to an exclusive event at the ancient library.",
+    "The protagonist arrives at the library and meets the enigmatic curator who sets them on a treasure hunt.",
+    "The protagonist discovers a hidden room deep within the library containing ancient artifacts and mysterious scrolls.",
+    "They begin deciphering the scrolls, which lead them to a series of puzzles and riddles.",
+    "As they progress through the puzzles, the protagonist uncovers a centuries-old conspiracy involving a powerful organization.",
+    "The protagonist must navigate the treacherous world of librarians and treasure hunters to uncover the truth.",
+    "In the climax, the protagonist faces off against a rival treasure hunter and solves the final puzzle to uncover the hidden treasure."
+  ],
+  "characters": [
+    {
+      "name": "Kavita \"Kavi\" Rao",
+      "description": "Kavita is a brilliant and resourceful protagonist in her late 20s. She has short, dark hair and bright brown eyes that sparkle with curiosity. She is petite but athletic, with a collection of scars from her adventures. Kavita is driven by a desire for knowledge and a sense of justice.",
+      "role": "Protagonist"
+    },
+    {
+      "name": "Dr. Rohan Desai",
+      "description": "Dr. Rohan Desai is an enigmatic and charming curator in his mid-40s. He has a tall, lean build and a mop of messy black hair. His eyes are a deep, piercing brown that seem to see right through you. Rohan is a master of manipulation, using his wit and charm to guide Kavita on her treasure hunt.",
+      "role": "Antagonist/Mentor"
+    },
+    {
+      "name": "Nalini \"Nali\" Patel",
+      "description": "Nalini is a feisty and determined rival treasure hunter in her early 20s. She has long, curly brown hair and a smattering of freckles across her cheeks. Nalini is small but fierce, with a quick wit and a sharp tongue. She is driven by a desire for fame and fortune.",
+      "role": "Antagonist"
+    },
+    {
+      "name": "Ramesh \"Ram\" Sharma",
+      "description": "Ramesh is a gruff but lovable librarian in his late 50s. He has a thick beard and a wild shock of white hair. His eyes are a warm, gentle brown that seem to hold a deep wisdom. Ram is a font of knowledge, able to recall even the most obscure details from the library's vast collections.",
+      "role": "Mentor"
+    },
+    {
+      "name": "Leela \"Lee\" Jain",
+      "description": "Leela is a quiet and reserved member of the powerful organization in her mid-30s. She has long, straight black hair and a pale, serene face. Leela is a skilled manipulator, using her charm and beauty to influence those around her. She is driven by a desire for power and control.",
+      "role": "Antagonist"
+    }
+  ],
+  "plots": [
+    "The protagonist discovers a hidden diary belonging to a former librarian who was murdered while trying to uncover the truth about the powerful organization. The diary holds crucial clues to the treasure's location.",
+    "The protagonist discovers that the powerful organization is not the only group searching for the treasure. A secret society of librarians, sworn to protect knowledge, is also on the hunt, and they will stop at nothing to keep the treasure out of the wrong hands.",
+    "The puzzles and riddles lead the protagonist to a hidden chamber deep beneath the library, where they discover a centuries-old artifact with the power to control the flow of knowledge. The powerful organization will stop at nothing to claim it."
+  ],
+  "episodes": [
+    {
+      "number": 1,
+      "title": "The Mysterious Invitation",
+      "content_length": 457,
+      "has_cliffhanger": true
+    },
+    {
+      "number": 2,
+      "title": "The Hidden Diary",
+      "content_length": 513,
+      "has_cliffhanger": true
+    },
+    {
+      "number": 3,
+      "title": "The Chamber of Knowledge",
+      "content_length": 448,
+      "has_cliffhanger": false
+    }
+  ]
+}
