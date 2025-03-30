@@ -13,6 +13,8 @@ from outline_generation_agent import OutlineGenerator
 from character_development_agent import CharacterDevelopmentAgent
 from plot_selector import StoryElementLibrary
 from splitter_agent import StorySplitterAgent, Episode
+from enhancement import EpisodeLengtheningAgent
+from dialogue_generation_agent import DialogueAgent
 from llm_api import llm_api
 
 def load_config():
@@ -71,7 +73,18 @@ def save_story(story_data, output_dir="generated_stories"):
         f.write("## Episodes\n")
         for episode in story_data['episodes']:
             f.write(f"### Episode {episode.number}: {episode.title}\n\n")
-            f.write(f"{episode.content}\n\n")
+            
+            # Use enhanced content if available
+            content = story_data.get('enhanced_episodes', {}).get(
+                episode.number, {}).get('lengthened_content', episode.content)
+            f.write(f"{content}\n\n")
+            
+            # Add dialogue if available
+            dialogue = story_data.get('dialogue', {}).get(episode.number)
+            if dialogue:
+                f.write("## Dialogue\n")
+                f.write(f"{dialogue}\n\n")
+            
             if episode.cliffhanger:
                 f.write(f"**Cliffhanger:** {episode.cliffhanger}\n\n")
     
@@ -84,7 +97,7 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     print(f"\n=== Generating story for topic: '{topic}' ===\n")
     
     # Step 1: Generate outline
-    print("Step 1/4: Generating story outline...")
+    print("Step 1/6: Generating story outline...")
     outline_generator = OutlineGenerator()
     outline = outline_generator.generate_outline(topic)
     
@@ -92,12 +105,12 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     outline_text = " ".join(outline)
     
     # Step 2: Generate characters
-    print("\nStep 2/4: Developing characters...")
+    print("\nStep 2/6: Developing characters...")
     character_agent = CharacterDevelopmentAgent()
     characters = character_agent.generate_characters(outline_text)
     
     # Step 3: Select plot elements
-    print("\nStep 3/4: Generating plot elements...")
+    print("\nStep 3/6: Generating plot elements...")
     plot_library = StoryElementLibrary()
     plot_options = plot_library.generate_plot_options(outline_text, story_type)
     
@@ -110,9 +123,65 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
         print(f"{i}. {plot}")
     
     # Step 4: Split into episodes
-    print("\nStep 4/4: Splitting story into episodes...")
+    print("\nStep 4/6: Splitting story into episodes...")
     splitter = StorySplitterAgent()
     episodes = splitter.split_story(outline_text, selected_plots, characters, num_episodes=num_episodes)
+    
+    # Step 5: Enhance episodes with lengthening
+    print("\nStep 5/6: Enhancing episodes with detailed content...")
+    lengthener = EpisodeLengtheningAgent()
+    enhanced_episodes = {}
+    
+    # Process only the first episode for demonstration purposes (to keep runtime reasonable)
+    # In production, you might want to process all or a subset of episodes
+    if episodes and len(episodes) > 0:
+        first_episode = episodes[0]
+        print(f"Enhancing episode {first_episode.number}: {first_episode.title}...")
+        
+        previous_episodes_summary = ""  # First episode has no previous episodes
+        previous_cliffhanger = ""
+        
+        # Process the first episode
+        enhanced = lengthener.lengthen_episode(
+            episode_title=first_episode.title,
+            episode_number=first_episode.number,
+            episode_outline=first_episode.content,
+            previous_episodes_summary=previous_episodes_summary,
+            previous_cliffhanger=previous_cliffhanger,
+            include_cliffhanger=bool(first_episode.cliffhanger)
+        )
+        
+        # Store the enhanced episode
+        enhanced_episodes[first_episode.number] = enhanced
+        
+        # Save to file
+        output_dir = "output_story"
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        file_name = f"Episode_{first_episode.number}_{first_episode.title.replace(' ', '_')}.md"
+        output_path = os.path.join(output_dir, file_name)
+        lengthener.save_episode_to_file(enhanced, output_path)
+    
+    # Step 6: Generate dialogue
+    print("\nStep 6/6: Generating dialogue for episodes...")
+    dialogue_agent = DialogueAgent()
+    dialogues = {}
+    
+    # Again, just process the first episode for demonstration
+    if episodes and len(episodes) > 0:
+        first_episode = episodes[0]
+        print(f"Generating dialogue for episode {first_episode.number}: {first_episode.title}...")
+        
+        # Generate dialogue
+        dialogue = dialogue_agent.generate_dialogue(
+            story_type=story_type,
+            storyline=first_episode.content,
+            characters=characters
+        )
+        
+        # Store the dialogue
+        dialogues[first_episode.number] = dialogue
     
     # Create story data structure
     story_data = {
@@ -121,7 +190,9 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
         "outline": outline,
         "characters": characters,
         "plots": selected_plots,
-        "episodes": episodes,  # this will now be properly serialized with our custom encoder
+        "episodes": episodes,
+        "enhanced_episodes": enhanced_episodes,
+        "dialogue": dialogues,
         "generated_at": datetime.now().isoformat()
     }
     
@@ -130,6 +201,8 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     
     print("\n=== Story generation complete! ===")
     print(f"Generated {len(episodes)} episodes with {len(characters)} characters")
+    print(f"Enhanced {len(enhanced_episodes)} episodes with detailed content")
+    print(f"Generated dialogue for {len(dialogues)} episodes")
     
     return story_data
 
