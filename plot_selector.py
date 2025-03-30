@@ -1,13 +1,10 @@
 from langchain.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
 import os
 import json
 import datetime
 import random
 from typing import List, Dict, Any
-from  dotenv import load_dotenv
-load_dotenv()
-# from llm_api import llm_api
+from llm_api import llm_api
 
 class StoryElementLibrary:
     """Library of story elements that provides plot options based on existing outlines."""
@@ -20,8 +17,12 @@ class StoryElementLibrary:
         elif "GROQ_API_KEY" not in os.environ:
             raise ValueError("GROQ API key must be provided either as an argument or as an environment variable")
         
-        
-        self.llm = self.llm = ChatGroq(model=model_name, api_key=api_key)
+        # Initialize LLM using the llm_api function
+        self.llm = llm_api(
+            model=model_name,
+            api_key=api_key,
+            streaming=False
+        )
         
         # Basic story element categories
         self.plot_twists = {

@@ -1,7 +1,7 @@
 from typing import List
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_groq import ChatGroq
+from llm_api import llm_api
 
 
 class OutlineQuery(BaseModel):
@@ -19,7 +19,7 @@ class OutlineQuery(BaseModel):
 
 class OutlineGenerator:
     def __init__(self, model, api_key):
-        self.llm = ChatGroq(model=model, api_key=api_key)
+        self.llm = llm_api(model=model, api_key=api_key)
         self.system_prompt = """You are an expert at generating detailed story outlines.
         Given a topic, generate a list of the main events that will happen in the story.
         For each story, you should provide at least 5-7 key events that form a coherent narrative.
