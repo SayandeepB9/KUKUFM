@@ -18,7 +18,7 @@ class EpisodeLengtheningAgent:
     """Agent that takes episode outlines and expands them to approximately 10k words"""
     
     def __init__(self, api_key=None):
-        print("Initializing LLM for creative_writing task")
+        print("Initializing LLM for story_enhancement task")
         self.llm = llm_api(api_key=api_key, model_type="story_enhancement")
         # Create a parser for the output
         self.parser = PydanticOutputParser(pydantic_object=LengthenedEpisode)
@@ -34,8 +34,9 @@ class EpisodeLengtheningAgent:
             "If this episode should end with a cliffhanger, make sure your expanded content "
             "builds properly toward it. "
             "Add depth through detailed scene descriptions, character development, "
-            "internal monologues, and rich world-building, all while maintaining the original plot points "
+            "and rich world-building, all while maintaining the original plot points "
             "and tone. Keep the narrative engaging throughout the extended length."
+            "Don't add any dialogues in the story and make it a narrative tone. "
         )
         
         # Using a regular prompt without structured output
@@ -56,7 +57,7 @@ class EpisodeLengtheningAgent:
                  "cliffhanger if one is required. If there was a previous cliffhanger, your "
                  "expanded narrative should address and resolve it naturally.\n\n"
                  "Respond with the lengthened story content only, without any introductory text or explanations."
-                 "Your response should have a totally narrative tone, as if the entire thing is presented by a narrator and no dialogue should be there.\n\n"
+                 "Your response should have a totally narrative tone, as if the entire thing is presented by a narrator and no dialogues should be there.\n\n"
                  "Ensure that the episode is very long as already mentioned and should contain atleast 10k words.\n\n"
                 ),
             ]

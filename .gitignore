@@ -2,3 +2,5 @@ venv
 .venv
 __pycache__
 generated_stories/
+.env
+*.env

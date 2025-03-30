@@ -33,6 +33,8 @@ try:
     from character_development_agent import CharacterDevelopmentAgent
     from plot_selector import StoryElementLibrary
     from splitter_agent import StorySplitterAgent
+    from enhancement import EpisodeLengtheningAgent
+    from dialogue_generation_agent import DialogueAgent
     from llm_api import llm_api
 except ImportError as e:
     print(f"ERROR: Failed to import local modules: {e}")
@@ -166,6 +168,76 @@ def test_story_splitter(outline, plots, characters):
         print(f"✗ Error testing story splitter agent: {e}")
         return None
 
+def test_episode_enhancer(episode, characters):
+    """Test the episode enhancer agent"""
+    print(f"\n=== Testing Episode Enhancer Agent ===")
+    try:
+        enhancer = EpisodeLengtheningAgent()
+        
+        if not episode:
+            print("✗ No episode provided for enhancement")
+            return None
+            
+        # Create a sample episode for enhancement
+        episode_title = episode.title
+        episode_number = episode.number
+        episode_outline = episode.content
+        
+        start_time = time.time()
+        # For testing, we'll set shorter content to speed up the test
+        enhanced = enhancer.lengthen_episode(
+            episode_title=episode_title,
+            episode_number=episode_number,
+            episode_outline=episode_outline,
+            previous_episodes_summary="This is the first episode.",
+            previous_cliffhanger="",
+            include_cliffhanger=bool(episode.cliffhanger)
+        )
+        elapsed_time = time.time() - start_time
+        
+        if enhanced and enhanced.lengthened_content:
+            print(f"✓ Episode enhancement successful (took {elapsed_time:.2f} seconds)")
+            word_count = len(enhanced.lengthened_content.split())
+            print(f"✓ Generated enhanced content with {word_count} words")
+            return enhanced
+        else:
+            print("✗ Failed to enhance episode")
+            return None
+    except Exception as e:
+        print(f"✗ Error testing episode enhancer: {e}")
+        return None
+
+def test_dialogue_generator(episode, characters):
+    """Test the dialogue generator agent"""
+    print(f"\n=== Testing Dialogue Generator Agent ===")
+    try:
+        if not episode or not characters:
+            print("✗ No episode or characters provided for dialogue generation")
+            return None
+            
+        dialogue_agent = DialogueAgent()
+        
+        start_time = time.time()
+        dialogue = dialogue_agent.generate_dialogue(
+            story_type="drama",  # Use drama for testing
+            storyline=episode.content,
+            characters=characters
+        )
+        elapsed_time = time.time() - start_time
+        
+        if dialogue:
+            print(f"✓ Dialogue generation successful (took {elapsed_time:.2f} seconds)")
+            # Count dialogue lines as a rough measure of success
+            line_count = dialogue.count('\n')
+            print(f"✓ Generated dialogue with approximately {line_count} lines")
+            return dialogue
+        else:
+            print("✗ Failed to generate dialogue")
+            return None
+    except Exception as e:
+        print(f"✗ Error testing dialogue generator: {e}")
+        return None
+
 def save_test_results(results):
     """Save test results to a file"""
     try:
@@ -187,6 +259,8 @@ def main():
         "character_development": None,
         "plot_selector": None,
         "story_splitter": None,
+        "episode_enhancer": None,
+        "dialogue_generator": None,
     }
     
     # Test LLM API
@@ -230,13 +304,27 @@ def main():
     episodes = test_story_splitter(outline_text, plots, characters)
     results["story_splitter"] = bool(episodes)
     
+    if not results["story_splitter"] or not episodes:
+        print("\nCannot proceed with further tests due to story splitting issues.")
+        save_test_results(results)
+        return
+    
+    # Test episode enhancer (using the first episode)
+    first_episode = episodes[0] if episodes else None
+    enhanced_episode = test_episode_enhancer(first_episode, characters)
+    results["episode_enhancer"] = bool(enhanced_episode)
+    
+    # Test dialogue generator (using the first episode)
+    dialogue = test_dialogue_generator(first_episode, characters)
+    results["dialogue_generator"] = bool(dialogue)
+    
     # Print summary
     print("\n=== Test Summary ===")
     for component, status in results.items():
         print(f"{component}: {'✓ Success' if status else '✗ Failed'}")
     
     # Save results
-    save_test_results({
+    test_results = {
         "test_results": results,
         "topic": test_topic,
         "outline": outline,
@@ -251,7 +339,24 @@ def main():
             }
             for ep in episodes
         ] if episodes else None
-    })
+    }
+    
+    # Add enhanced episode if available
+    if enhanced_episode:
+        test_results["enhanced_episode"] = {
+            "title": enhanced_episode.title,
+            "content_length": len(enhanced_episode.lengthened_content),
+            "word_count": len(enhanced_episode.lengthened_content.split())
+        }
+    
+    # Add dialogue if available
+    if dialogue:
+        test_results["dialogue"] = {
+            "content_length": len(dialogue),
+            "line_count": dialogue.count('\n')
+        }
+    
+    save_test_results(test_results)
 
 if __name__ == "__main__":
     main()
