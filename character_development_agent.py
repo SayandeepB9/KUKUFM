@@ -18,8 +18,8 @@ class CharacterQuery(BaseModel):
 
 
 class CharacterDevelopmentAgent:
-    def __init__(self, model, api_key):
-        self.llm = llm_api(model=model, api_key=api_key)
+    def __init__(self, api_key=None):
+        self.llm = llm_api(api_key=api_key, model_type="character_development")
         self.system_prompt = """You are an expert at developing story characters.
         
         Given a plot, generate detailed descriptions and roles for 3-5 distinctive indian characters in the indian background in the story.
@@ -53,10 +53,7 @@ class CharacterDevelopmentAgent:
 
 
 if __name__ == "__main__":
-    model = "llama-3.1-8b-instant" 
-    api_key = "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"  
-
-    agent = CharacterDevelopmentAgent(model=model, api_key=api_key)
+    agent = CharacterDevelopmentAgent()
     print("Enter the plot: ")
     plot = input('> ')
 
