@@ -11,6 +11,9 @@ api_keys:
   groq: ""  # Will use GROQ_API_KEY from .env
   openai: "" # Will use OPENAI_API_KEY from .env
   
+# Default provider to use when both API keys are available
+preferred_provider: "groq"  # Options: "groq", "openai"
+  
 # General settings
 settings:
   temperature: 0.7

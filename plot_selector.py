@@ -5,27 +5,53 @@ import datetime
 import random
 from typing import List, Dict, Any
 from llm_api import llm_api
+import yaml
 
 class StoryElementLibrary:
     """Library of story elements that provides plot options based on existing outlines."""
     
-    def __init__(self, model_name="llama3-70b-8192", api_key=None):
+    def __init__(self, api_key=None):
         """Initialize the story element library."""
-        # Set up API key
-        if api_key:
-            os.environ["GROQ_API_KEY"] = api_key
-        elif "GROQ_API_KEY" not in os.environ:
-            raise ValueError("GROQ API key must be provided either as an argument or as an environment variable")
-        
         # Initialize LLM using the llm_api function
         self.llm = llm_api(
-            model=model_name,
             api_key=api_key,
+            model_type="plot_selection",
             streaming=False
         )
         
-        # Basic story element categories
-        self.plot_twists = {
+        # Load plot twists from config or use defaults
+        self.plot_twists = self._load_plot_twists()
+        
+        # Initialize the plot options prompt
+        self.plot_options_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a creative writing assistant that specializes in providing plot options "
+                     "based on a story outline. Generate 10 distinct and creative plot options that would work well "
+                     "with the provided outline. Each plot option should be a complete plot point that could be "
+                     "inserted into the story. Format your response as a JSON array of strings, where each string "
+                     "is a single plot option. Make each option distinct and creative. Consider the story type "
+                     "and outline themes when generating plot options."),
+            ("human", "Story Type: {story_type}\nOutline: {outline}\n\n"
+                    "Please provide 10 engaging plot options that could enhance this story.")
+        ])
+        
+        self.plot_options_chain = self.plot_options_prompt | self.llm
+        
+        # Store selected plot options
+        self.selected_plot_options = []
+
+    def _load_plot_twists(self):
+        """Load plot twists from a config file if available, otherwise use defaults."""
+        try:
+            config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+            with open(config_path, 'r') as file:
+                config = yaml.safe_load(file)
+                if 'plot_twists' in config:
+                    return config['plot_twists']
+        except Exception as e:
+            print(f"Using default plot twists: {e}")
+        
+        # Default plot twists if config loading fails
+        return {
             "general": [
                 "The protagonist discovers they've been misled the entire time",
                 "A trusted ally is revealed to be working against the protagonist",
@@ -38,17 +64,17 @@ class StoryElementLibrary:
                 "A prophecy/prediction is fulfilled but in an unexpected way",
                 "A character's true identity is revealed, changing the story's context"
             ],
-            "ghost": [
-                "The ghost is actually protecting the protagonist from a greater evil",
-                "The protagonist discovers they've been dead the whole time",
-                "The haunting is revealed to be a hoax by a living person with ulterior motives",
-                "The ghost is actually from the future, not the past",
-                "Multiple spirits are revealed to be different aspects of the same person",
-                "The supposed ghost is actually a living person trapped between dimensions",
-                "The protagonist discovers they can see ghosts due to a near-death experience in their forgotten past",
-                "The ghost is revealed to be a manifestation of the protagonist's guilt or trauma",
+            "horror": [
+                "The monster is revealed to be a manifestation of the protagonist's trauma",
+                "The supposed villain was actually protecting the protagonist from a worse threat",
+                "The protagonist discovers they're already dead/possessed/transformed",
                 "The haunting is revealed to be caused by an object, not a location",
-                "The ghost is revealed to be the protagonist from another timeline"
+                "The ghost is revealed to be the protagonist from another timeline",
+                "The protagonist discovers they can see ghosts due to a near-death experience in their forgotten past",
+                "The ghost is actually protecting the protagonist from a greater evil",
+                "The haunting is revealed to be a hoax by a living person with ulterior motives",
+                "Multiple spirits are revealed to be different aspects of the same person",
+                "The ghost is revealed to be a manifestation of the protagonist's guilt or trauma"
             ],
             "sci-fi": [
                 "Technology intended to help humanity is revealed to have a sinister purpose",
@@ -63,22 +89,6 @@ class StoryElementLibrary:
                 "The corporation is revealed to be controlled by a non-human intelligence"
             ]
         }
-        
-        # Initialize the plot options prompt
-        self.plot_options_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a creative writing assistant that specializes in providing plot options "
-                     "based on a story outline. Generate 10 distinct and creative plot options that would work well "
-                     "with the provided outline. Each plot option should be a complete plot point that could be "
-                     "inserted into the story. Format your response as a JSON array of strings, where each string "
-                     "is a single plot option. Make each option distinct and creative."),
-            ("human", "Story Type: {story_type}\nOutline: {outline}\n\n"
-                    "Please provide 10 engaging plot options that could enhance this story.")
-        ])
-        
-        self.plot_options_chain = self.plot_options_prompt | self.llm
-        
-        # Store selected plot options
-        self.selected_plot_options = []
 
     def generate_plot_options(self, outline, story_type):
         """Generate plot options that would enhance the outline."""
@@ -258,16 +268,16 @@ def extract_outline_from_input(input_text):
 def main():
     # Display header
     current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    current_user = "Sag12345-IITKGP"
+    current_user = os.getenv("USER", "Unknown")
     
-    print(f"Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {current_datetime}")
-    print(f"Current User's Login: {current_user}")
+    print(f"Current Date and Time: {current_datetime}")
+    print(f"Current User: {current_user}")
     print("\n=== STORY PLOT OPTIONS SELECTOR ===")
     
-    # Get API key if not set in environment
-    api_key = os.environ.get("GROQ_API_KEY")
+    # Get API key from environment or config
+    api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        print("Please enter your Groq API key:")
+        print("Please enter your API key (Groq or OpenAI):")
         api_key = input("> ")
     
     try:
