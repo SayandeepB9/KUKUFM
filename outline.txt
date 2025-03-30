@@ -1,0 +1,9 @@
+---GENERATED STORY OUTLINE---
+Event 1: Guests arrive at the hotel for a mysterious conference
+Event 2: The guests experience strange occurrences in their rooms
+Event 3: The hotel's dark past is revealed through a series of eerie hints
+Event 4: The guests begin to disappear one by one
+Event 5: The main character discovers a hidden room with a terrifying secret
+Event 6: The hotel's ghostly presence becomes increasingly aggressive
+Event 7: The main character must escape the hotel alive
+Generated Outline: ['Guests arrive at the hotel for a mysterious conference', 'The guests experience strange occurrences in their rooms', "The hotel's dark past is revealed through a series of eerie hints", 'The guests begin to disappear one by one', 'The main character discovers a hidden room with a terrifying secret', "The hotel's ghostly presence becomes increasingly aggressive", 'The main character must escape the hotel alive']
