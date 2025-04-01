@@ -31,6 +31,8 @@ class EpisodeLengtheningAgent:
             "of approximately 10k words. You must maintain perfect continuity with "
             "previous episodes (as summarized) and ensure that any cliffhanger from the "
             "previous episode is properly addressed and resolved in your expanded narrative. "
+            "You must also seamlessly set up elements that will be important in future episodes "
+            "to maintain narrative coherence across the entire story arc. "
             "If this episode should end with a cliffhanger, make sure your expanded content "
             "builds properly toward it. "
             "Add depth through detailed scene descriptions, character development, "
@@ -50,12 +52,15 @@ class EpisodeLengtheningAgent:
                  "Previous Episodes Summary: {previous_episodes_summary}\n"
                  "Previous Cliffhanger: {previous_cliffhanger}\n"
                  "Episode Outline: {episode_outline}\n"
-                 "Should End With Cliffhanger: {include_cliffhanger}\n\n"
+                 "Should End With Cliffhanger: {include_cliffhanger}\n"
+                 "Future Episodes Outlines: {future_episodes_outlines}\n\n"
                  "Expand this episode by creating a richly detailed narrative with extended descriptions, "
                  "character insights, and world-building elements. "
                  "Ensure you maintain the original plot direction while building toward the established "
                  "cliffhanger if one is required. If there was a previous cliffhanger, your "
                  "expanded narrative should address and resolve it naturally.\n\n"
+                 "Use the future episodes outlines to plant seeds and foreshadow upcoming events, "
+                 "ensuring a seamless transition between this episode and future ones.\n\n"
                  "Respond with the lengthened story content only, without any introductory text or explanations."
                  "Your response should have a totally narrative tone, as if the entire thing is presented by a narrator and no dialogues should be there.\n\n"
                  "Ensure that the episode is very long as already mentioned and should contain atleast 10k words.\n\n"
@@ -72,9 +77,10 @@ class EpisodeLengtheningAgent:
                          episode_outline: str,
                          previous_episodes_summary: str,
                          previous_cliffhanger: str = "",
-                         include_cliffhanger: bool = True):
+                         include_cliffhanger: bool = True,
+                         future_episodes_outlines: str = ""):
         """
-        Lengthen an episode based on its outline and previous content
+        Lengthen an episode based on its outline, previous content, and future episode outlines
         
         Args:
             episode_title (str): Title of the current episode
@@ -83,6 +89,7 @@ class EpisodeLengtheningAgent:
             previous_episodes_summary (str): Summary of all previous episodes
             previous_cliffhanger (str): The cliffhanger from the previous episode that needs resolution
             include_cliffhanger (bool): Whether this episode should end with a cliffhanger
+            future_episodes_outlines (str): Outlines of future episodes to help maintain continuity
             
         Returns:
             LengthenedEpisode: The expanded episode
@@ -94,7 +101,8 @@ class EpisodeLengtheningAgent:
                 "previous_episodes_summary": previous_episodes_summary,
                 "previous_cliffhanger": previous_cliffhanger,
                 "episode_outline": episode_outline,
-                "include_cliffhanger": "Yes" if include_cliffhanger else "No"
+                "include_cliffhanger": "Yes" if include_cliffhanger else "No",
+                "future_episodes_outlines": future_episodes_outlines
             }
             
             # Instead of using structured output, get the raw content
@@ -170,13 +178,21 @@ if __name__ == "__main__":
         
         previous_cliffhanger = "As Alice turned the final page of the historical record, the lights flickered and a spectral figure appeared in the corner of the room. 'You're looking in the wrong places,' the apparition whispered, its voice eerily familiar. 'I've been waiting for you, Detective Morgan.'"
         
-        # Generate the lengthened episode
+        # Add future episodes outlines to provide context for what comes next
+        future_episodes_outlines = """
+        Episode 4 - The Secret Society: Alice and Victor discover that there is a secret society in Ravenwood that has been protecting an ancient artifact for centuries. They must infiltrate the society to learn more about the curse and how to stop it.
+        
+        Episode 5 - The Final Confrontation: Alice confronts the leader of the secret society and learns that Evelyn is connected to the original curse. A final showdown takes place at the town's oldest building where the curse began.
+        """
+        
+        # Generate the lengthened episode with future episodes context
         lengthened_episode = lengthener.lengthen_episode(
             episode_title=episode_title,
             episode_number=episode_number,
             episode_outline=episode_outline,
             previous_episodes_summary=previous_episodes_summary,
-            previous_cliffhanger=previous_cliffhanger
+            previous_cliffhanger=previous_cliffhanger,
+            future_episodes_outlines=future_episodes_outlines
         )
         
         # Save to file
