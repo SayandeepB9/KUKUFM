@@ -34,6 +34,22 @@ class OutlineGenerator:
         )
         self.outline_generator = self.outline_prompt | self.structured_llm_outline
 
+        self.refine_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", self.system_prompt),
+                ("human", """Here is a previous story outline on the topic: {topic}
+                
+Previous events:
+{previous_outline}
+
+Human feedback:
+{feedback}
+
+Please refine the outline based on this feedback. Return a new list of events in the 'events' field."""),
+            ]
+        )
+        self.refine_generator = self.refine_prompt | self.structured_llm_outline
+
     def generate_outline(self, topic):
         outline = self.outline_generator.invoke({"topic": topic})
         print("---GENERATED STORY OUTLINE---")
@@ -41,9 +57,40 @@ class OutlineGenerator:
             print(f"Event {i}: {event}")
         return outline.events
 
+    def refine_outline(self, topic, previous_events, feedback):
+        """
+        Refines a story outline based on human feedback.
+
+        Args:
+            topic (str): The original topic of the story
+            previous_events (List[str]): The events from the previous outline
+            feedback (str): Human feedback on how to improve the outline
+
+        Returns:
+            List[str]: Refined list of story events
+        """
+        previous_outline = "\n".join([f"{i}. {event}" for i, event in enumerate(previous_events, 1)])
+        
+        refined_outline = self.refine_generator.invoke({
+            "topic": topic,
+            "previous_outline": previous_outline,
+            "feedback": feedback
+        })
+        
+        print("---REFINED STORY OUTLINE---")
+        for i, event in enumerate(refined_outline.events, 1):
+            print(f"Event {i}: {event}")
+            
+        return refined_outline.events
+
 
 if __name__ == "__main__":
     generator = OutlineGenerator()
     topic = "A horror story in a haunted hotel"
     events = generator.generate_outline(topic)
     print("Generated Outline:", events)
+    
+    # Example of using refine_outline
+    feedback = "Make the story more spiritual and less about supernatural elements"
+    refined_events = generator.refine_outline(topic, events, feedback)
+    print("Refined Outline:", refined_events)
