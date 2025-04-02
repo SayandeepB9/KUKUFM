@@ -34,22 +34,6 @@ class OutlineGenerator:
         )
         self.outline_generator = self.outline_prompt | self.structured_llm_outline
 
-        self.refine_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", self.system_prompt),
-                ("human", """Here is a previous story outline on the topic: {topic}
-                
-Previous events:
-{previous_outline}
-
-Human feedback:
-{feedback}
-
-Please refine the outline based on this feedback. Return a new list of events in the 'events' field."""),
-            ]
-        )
-        self.refine_generator = self.refine_prompt | self.structured_llm_outline
-
     def generate_outline(self, topic):
         outline = self.outline_generator.invoke({"topic": topic})
         print("---GENERATED STORY OUTLINE---")
@@ -57,23 +41,41 @@ Please refine the outline based on this feedback. Return a new list of events in
             print(f"Event {i}: {event}")
         return outline.events
 
-    def refine_outline(self, topic, previous_events, feedback):
+    def refine_outline(self, topic, outline, feedback):
         """
-        Refines a story outline based on human feedback.
-
-        Args:
-            topic (str): The original topic of the story
-            previous_events (List[str]): The events from the previous outline
-            feedback (str): Human feedback on how to improve the outline
-
-        Returns:
-            List[str]: Refined list of story events
-        """
-        previous_outline = "\n".join([f"{i}. {event}" for i, event in enumerate(previous_events, 1)])
+        Refine an existing outline based on feedback.
         
-        refined_outline = self.refine_generator.invoke({
+        Args:
+            topic (str): The topic of the story
+            outline (List[str]): The existing outline events
+            feedback (str): Feedback to incorporate into the refined outline
+            
+        Returns:
+            List[str]: The refined list of events
+        """
+        refine_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", self.system_prompt),
+                ("human", """I have an outline for a story on the following topic: {topic}.
+                
+                Current outline:
+                {outline}
+                
+                Feedback on the outline:
+                {feedback}
+                
+                Please provide a refined outline that incorporates this feedback. Return a list of events in the 'events' field."""),
+            ]
+        )
+        
+        refine_chain = refine_prompt | self.structured_llm_outline
+        
+        # Format the outline as a numbered list for the prompt
+        formatted_outline = "\n".join([f"{i+1}. {event}" for i, event in enumerate(outline)])
+        
+        refined_outline = refine_chain.invoke({
             "topic": topic,
-            "previous_outline": previous_outline,
+            "outline": formatted_outline,
             "feedback": feedback
         })
         
@@ -89,8 +91,3 @@ if __name__ == "__main__":
     topic = "A horror story in a haunted hotel"
     events = generator.generate_outline(topic)
     print("Generated Outline:", events)
-    
-    # Example of using refine_outline
-    feedback = "Make the story more spiritual and less about supernatural elements"
-    refined_events = generator.refine_outline(topic, events, feedback)
-    print("Refined Outline:", refined_events)

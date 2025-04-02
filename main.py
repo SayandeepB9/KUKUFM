@@ -4,6 +4,8 @@ import argparse
 import yaml
 import json
 from datetime import datetime
+import concurrent.futures
+from tqdm import tqdm  # For progress bars
 
 # Load environment variables
 load_dotenv()
@@ -195,7 +197,57 @@ def translate_story(story_file, target_language, story_dir):
     print(f"Translated story saved to: {translated_file}")
     return translated_file
 
-def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_language=None):
+def translate_story_parallel(story_file, target_languages, story_dir):
+    """Translate the final story to multiple target languages in parallel"""
+    if not target_languages:
+        return []
+        
+    print(f"\nTranslating story to {len(target_languages)} languages in parallel...")
+    
+    # Read the content of the final story once
+    with open(story_file, 'r', encoding='utf-8') as f:
+        story_content = f.read()
+    
+    # Initialize translator agent
+    translator = TranslatorAgent()
+    translated_files = []
+    
+    # Function to translate to a single language
+    def translate_to_language(language):
+        try:
+            # Translate the story
+            translated_content = translator.translate_story(story_content, language)
+            
+            # Save the translated content to a new file
+            translated_file = os.path.join(story_dir, f"final_story_{language.lower()}.md")
+            with open(translated_file, 'w', encoding='utf-8') as f:
+                f.write(translated_content)
+            
+            return language, translated_file
+        except Exception as e:
+            print(f"Error translating to {language}: {e}")
+            return language, None
+    
+    # Process translations in parallel
+    max_workers = min(10, len(target_languages))  # Limit concurrent API calls
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all translation tasks
+        future_to_language = {executor.submit(translate_to_language, lang): lang for lang in target_languages}
+        
+        # Process results as they complete
+        for future in tqdm(concurrent.futures.as_completed(future_to_language), total=len(target_languages), desc="Translating"):
+            try:
+                language, file_path = future.result()
+                if file_path:
+                    translated_files.append((language, file_path))
+                    print(f"✓ Translated to {language}: {file_path}")
+            except Exception as e:
+                language = future_to_language[future]
+                print(f"× Failed to translate to {language}: {e}")
+    
+    return translated_files
+
+def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_languages=None):
     """Run the complete story generation pipeline"""
     print(f"\n=== Generating story for topic: '{topic}' ===\n")
     
@@ -236,56 +288,88 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     splitter = StorySplitterAgent()
     episodes = splitter.split_story(outline_text, selected_plots, characters, num_episodes=num_episodes)
     
-    # Step 5: Enhance episodes with lengthening
-    print("\nStep 5/6: Enhancing episodes with detailed content...")
+    # Step 5: Enhance episodes with lengthening - using parallel processing
+    print("\nStep 5/6: Enhancing episodes with detailed content in parallel...")
     lengthener = EpisodeLengtheningAgent()
     enhanced_episodes = {}
     
+    # Pre-compute episode contexts
+    episode_contexts = []
     previous_episodes_summary = ""
     previous_cliffhanger = ""
     
     for i, episode in enumerate(episodes):
-        print(f"Enhancing episode {episode.number}: {episode.title}...")
+        # Generate future episodes outlines to provide context
+        future_episodes_outlines = ""
+        if i < len(episodes) - 1:
+            # Include up to 3 future episodes or whatever is available
+            future_episodes = episodes[i+1:i+4]
+            future_outlines = []
+            for j, future_ep in enumerate(future_episodes):
+                future_outlines.append(f"Episode {future_ep.number} - {future_ep.title}: {future_ep.content}")
+            future_episodes_outlines = "\n\n".join(future_outlines)
         
-        # Process each episode
-        enhanced = lengthener.lengthen_episode(
-            episode_title=episode.title,
-            episode_number=episode.number,
-            episode_outline=episode.content,
-            previous_episodes_summary=previous_episodes_summary,
-            previous_cliffhanger=previous_cliffhanger,
-            include_cliffhanger=bool(episode.cliffhanger)
-        )
+        context = {
+            "episode": episode,
+            "episode_title": episode.title,
+            "episode_number": episode.number,
+            "episode_outline": episode.content,
+            "previous_episodes_summary": previous_episodes_summary,
+            "previous_cliffhanger": previous_cliffhanger,
+            "include_cliffhanger": bool(episode.cliffhanger),
+            "future_episodes_outlines": future_episodes_outlines
+        }
+        episode_contexts.append(context)
         
-        # Store the enhanced episode
-        enhanced_episodes[episode.number] = enhanced
-        
-        # Update previous episode summary for next iteration
-        if hasattr(enhanced, 'summary'):
-            previous_episodes_summary += enhanced.summary + " "
-        else:
-            previous_episodes_summary += f"Episode {episode.number}: {episode.title}. "
-        
+        # Update for next iteration
+        previous_episodes_summary += str(episode.number) + ". " + episode.title + "\n" + episode.content + "\n\n"
         previous_cliffhanger = episode.cliffhanger if episode.cliffhanger else ""
+    
+    # Function to enhance a single episode
+    def enhance_episode(context):
+        episode = context["episode"]
+        enhanced = lengthener.lengthen_episode(
+            episode_title=context["episode_title"],
+            episode_number=context["episode_number"],
+            episode_outline=context["episode_outline"],
+            previous_episodes_summary=context["previous_episodes_summary"],
+            previous_cliffhanger=context["previous_cliffhanger"],
+            include_cliffhanger=context["include_cliffhanger"],
+            future_episodes_outlines=context["future_episodes_outlines"]
+        )
         
         # Save to file within the story directory
         file_name = f"Episode_{episode.number}_{episode.title.replace(' ', '_')}.md"
         output_path = os.path.join(story_dir, "episodes", file_name)
         lengthener.save_episode_to_file(enhanced, output_path)
+        
+        return episode.number, enhanced
     
-    # Step 6: Generate dialogue
-    print("\nStep 6/6: Generating dialogue for episodes...")
+    # Process episodes in parallel
+    max_workers = min(10, len(episodes))  # Limit the number of concurrent API calls
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_episode = {executor.submit(enhance_episode, context): context for context in episode_contexts}
+        
+        # Process results as they complete
+        for future in tqdm(concurrent.futures.as_completed(future_to_episode), total=len(episodes), desc="Enhancing episodes"):
+            try:
+                episode_number, enhanced = future.result()
+                enhanced_episodes[episode_number] = enhanced
+            except Exception as e:
+                context = future_to_episode[future]
+                print(f"Error enhancing episode {context['episode_number']}: {e}")
+    
+    # Step 6: Generate dialogue in parallel
+    print("\nStep 6/6: Generating dialogue for episodes in parallel...")
     dialogue_agent = DialogueAgent()
     dialogues = {}
     
-    # Process all episodes for dialogue generation
-    for episode in episodes:
-        print(f"Generating dialogue for episode {episode.number}: {episode.title}...")
-        
+    # Function to generate dialogue for a single episode
+    def generate_episode_dialogue(episode):
         # Use enhanced content if available
         enhanced_episode = enhanced_episodes.get(episode.number)
         if enhanced_episode and hasattr(enhanced_episode, 'lengthened_content'):
-            print("Using enhanced content for dialogue generation...")
             episode_content = enhanced_episode.lengthened_content
         else:
             episode_content = episode.content
@@ -297,14 +381,27 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
             characters=characters
         )
         
-        # Store the dialogue and save to separate file 
-        dialogues[episode.number] = dialogue
-        
         # Save dialogue to separate file
         dialogue_file = os.path.join(story_dir, "dialogue", f"dialogue_episode_{episode.number}.md")
         with open(dialogue_file, 'w', encoding='utf-8') as f:
             f.write(f"# Dialogue for Episode {episode.number}: {episode.title}\n\n")
             f.write(dialogue)
+        
+        return episode.number, dialogue
+    
+    # Process dialogues in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_dialogue = {executor.submit(generate_episode_dialogue, episode): episode for episode in episodes}
+        
+        # Process results as they complete
+        for future in tqdm(concurrent.futures.as_completed(future_to_dialogue), total=len(episodes), desc="Generating dialogues"):
+            try:
+                episode_number, dialogue = future.result()
+                dialogues[episode_number] = dialogue
+            except Exception as e:
+                episode = future_to_dialogue[future]
+                print(f"Error generating dialogue for episode {episode.number}: {e}")
     
     # Create story data structure - convert enhanced_episodes to serializable format
     serializable_enhanced_episodes = {}
@@ -336,10 +433,17 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     # Save the final publishable story
     final_story_file = save_final_story(story_data, story_dir)
     
-    # Step 7 (Optional): Translate the final story if a target language is specified
-    translated_file = None
-    if target_language:
-        translated_file = translate_story(final_story_file, target_language, story_dir)
+    # Step 7 (Optional): Translate the final story to multiple languages if specified
+    translated_files = []
+    if target_languages:
+        if isinstance(target_languages, str):
+            # Single language case
+            translated_file = translate_story(final_story_file, target_languages, story_dir)
+            if translated_file:
+                translated_files.append((target_languages, translated_file))
+        else:
+            # Multiple languages case - translate in parallel
+            translated_files = translate_story_parallel(final_story_file, target_languages, story_dir)
     
     print("\n=== Story generation complete! ===")
     print(f"Generated {len(episodes)} episodes with {len(characters)} characters")
@@ -347,8 +451,10 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     print(f"Generated dialogue for {len(dialogues)} episodes")
     print(f"All story files saved to directory: {story_dir}")
     
-    if translated_file:
-        print(f"Story translated to {target_language} and saved to: {translated_file}")
+    if translated_files:
+        print(f"Story translated to {len(translated_files)} languages:")
+        for language, file_path in translated_files:
+            print(f"  - {language}: {os.path.basename(file_path)}")
     
     return story_data, story_dir
 
@@ -358,7 +464,7 @@ def main():
     parser.add_argument("topic", help="Topic or theme for the story")
     parser.add_argument("--episodes", type=int, default=5, help="Number of episodes (default: 5)")
     parser.add_argument("--type", default="general", help="Story type (e.g., mystery, sci-fi, fantasy)")
-    parser.add_argument("--translate", help="Translate the final story to this language (e.g., Hindi, French, Spanish)")
+    parser.add_argument("--translate", nargs='+', help="Translate the final story to these languages (e.g., Hindi French Spanish)")
     
     args = parser.parse_args()
     
