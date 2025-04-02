@@ -4,6 +4,31 @@ from langchain_core.prompts import ChatPromptTemplate
 from llm_api import llm_api, get_model_from_config
 import json
 import re
+import os
+
+class Character(BaseModel):
+    """A character in a story"""
+    
+    name: str = Field(
+        ...,
+        description="A unique and fitting name for the character"
+    )
+    description: str = Field(
+        ...,
+        description="A detailed physical and psychological description of the character"
+    )
+    role: str = Field(
+        ...,
+        description="The character's role in the story's plot (e.g., protagonist, antagonist, supporting)"
+    )
+
+class CharacterList(BaseModel):
+    """A list of characters for a story"""
+    
+    characters: List[Character] = Field(
+        default_factory=list,
+        description="List of characters for the story, typically 3-5 distinctive characters"
+    )
 
 class CharacterDevelopmentAgent:
     def __init__(self, api_key=None):
@@ -11,100 +36,188 @@ class CharacterDevelopmentAgent:
         self.model_type = "character_development"
         self.llm = llm_api(api_key=api_key, model_type=self.model_type)
         
-        self.system_prompt = """You are an expert at developing story characters.
+        # Load character types from story elements library
+        self.character_types = self.load_character_types()
         
-        Given a plot, generate detailed descriptions and roles for 3-5 distinctive Indian characters in the story.
+        self.system_prompt = f"""You are an expert at developing story characters.
+        
+        Given a plot, generate detailed descriptions and roles for distinctive characters in the story.
         
         For each character, include:
         1. A unique and fitting name (name)
         2. A detailed physical and psychological description (description)
         3. The character's role in the story's plot (role)
         
-        Format your response as a JSON array of character objects, each with 'name', 'description', and 'role' fields.
+        Consider including a mix of these character types:
+        {', '.join(self.character_types)}
+        You should add only characters that fit well with the story and must not force characters of all types into the story.
+        Make sure the characters are appropriate for the plot, with distinct personalities, motivations, and backgrounds.
+        Each character should have clear traits and serve a specific purpose in the story. Add side characters too if needed.
+        
+        Return a list of character objects with 'name', 'description', and 'role' fields in the 'characters' array.
         """
         
         # Get the selected model name from config
         self.model_name = get_model_from_config(self.model_type)
         
+        # Create structured output parser
+        self.structured_llm_characters = self.llm.with_structured_output(CharacterList)
+        
         self.character_prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
-            ("human", """Generate 3-5 character descriptions for the following plot.
+            ("human", """Generate characters descriptions for the following plot.
             
 Plot: {plot}
 
-Format each character as a JSON object with 'name', 'description', and 'role' fields.
+Consider which character types would best serve this story from the list provided.
+Create characters with depth, nuance, and clear motivations.
+Ensure the characters feel authentic for the Indian context and cultural setting.
 
-Example response format:
-[
-    {{"name": "Character Name", "description": "Character description", "role": "Character role"}},
-    {{"name": "Another Character", "description": "Another description", "role": "Another role"}}
-]""")
+Please provide characters that fit well with this story and have unique personalities and backgrounds.
+Return them in the 'characters' field as structured data.""")
         ])
         
-        self.character_generator = self.character_prompt | self.llm
+        # Chain the prompt with the structured output LLM
+        self.character_generator = self.character_prompt | self.structured_llm_characters
+        
+        # Add refinement prompt
+        self.refine_prompt = ChatPromptTemplate.from_messages([
+            ("system", self.system_prompt),
+            ("human", """Here is the previously generated character output for the plot:
+Plot: {plot}
+
+Previous Characters:
+{previous_characters}
+
+Human Feedback:
+{feedback}
+
+Please refine the character descriptions and roles based on the above feedback.
+Consider which character types would best serve this story from the list provided.
+Create characters with depth, nuance, and clear motivations.
+
+Return them in the 'characters' field as structured data.""")
+        ])
+        
+        # Chain the refine prompt with the structured output LLM
+        self.refine_generator = self.refine_prompt | self.structured_llm_characters
+        
+    def load_character_types(self):
+        """Load character types from the story elements library JSON file"""
+        try:
+            # Find the story_elements.json file
+            file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "story_elements.json")
+            
+            
+            if not os.path.exists(file_path):
+                file_path = "story_elements.json"
+                
+            with open(file_path, 'r') as f:
+                story_elements = json.load(f)
+                
+            
+            character_types = story_elements.get("literary_elements", {}).get("characters", [])
+            
+            
+            if character_types:
+                print(f"Loaded {len(character_types)} character types from story elements library")
+                return character_types
+            else:
+                print("No character types found in story elements library")
+                return self.get_default_character_types()
+                
+        except Exception as e:
+            print(f"Error loading story elements: {str(e)}")
+            return self.get_default_character_types()
+            
+    def get_default_character_types(self):
+        """Return default character types if the JSON file cannot be loaded"""
+        return [
+            "Protagonist (hero/heroine)", 
+            "Antagonist (villain)", 
+            "Deuteragonist (secondary main character)",
+            "Foil (character highlighting traits of another)",
+            "Dynamic (evolving)",
+            "Round (complex, multidimensional)",
+            "Anti-hero",
+            "Tragic hero",
+            "Mentor/guide",
+            "Sidekick/confidant",
+            "Trickster"
+        ]
 
     def generate_characters(self, plot):
         print(f"Generating characters for plot: {plot[:50]}...")
         
         try:
-            # Use direct generation approach
+           
             response = self.character_generator.invoke({"plot": plot})
-            content = response.content if hasattr(response, 'content') else str(response)
             
-            # Extract JSON from the response
-            json_pattern = r'\[[\s\S]*?\]'
-            json_match = re.search(json_pattern, content)
+            characters = [
+                {"name": char.name, "description": char.description, "role": char.role}
+                for char in response.characters
+            ]
             
-            if json_match:
-                characters = json.loads(json_match.group())
-                print("---GENERATED CHARACTER DESCRIPTIONS AND ROLES---")
-                for character in characters:
-                    print(f"Name: {character['name']}")
-                    print(f"Description: {character['description']}")
-                    print(f"Role: {character['role']}")
-                    print("------")
-                return characters
-            else:
-                # Try to extract individual JSON objects if we couldn't get an array
-                char_pattern = r'\{[^{}]*"name":[^{}]*"description":[^{}]*"role":[^{}]*\}'
-                matches = re.findall(char_pattern, content.replace("\n", " "))
-                
-                if matches:
-                    characters = []
-                    for match in matches:
-                        try:
-                            # Clean up the JSON string and make it valid
-                            cleaned = match.replace("'", "\"")
-                            char = json.loads(cleaned)
-                            if 'name' in char and 'description' in char and 'role' in char:
-                                characters.append(char)
-                        except:
-                            continue
-                    
-                    if characters:
-                        print("---GENERATED CHARACTER DESCRIPTIONS AND ROLES---")
-                        for character in characters:
-                            print(f"Name: {character['name']}")
-                            print(f"Description: {character['description']}")
-                            print(f"Role: {character['role']}")
-                            print("------")
-                        return characters
-                
-                # If all parsing fails
-                print("Could not parse characters from response, using fallback characters")
-                return [
-                    {"name": "Character 1", "description": "A character from the story", "role": "Protagonist"},
-                    {"name": "Character 2", "description": "Another character from the story", "role": "Supporting"},
-                    {"name": "Character 3", "description": "A third character from the story", "role": "Antagonist"}
-                ]
+            print("---GENERATED CHARACTER DESCRIPTIONS AND ROLES---")
+            for character in characters:
+                print(f"Name: {character['name']}")
+                print(f"Description: {character['description']}")
+                print(f"Role: {character['role']}")
+                print("------")
+            
+            return characters
                 
         except Exception as e:
             print(f"Error generating characters: {str(e)}")
+
             return [
                 {"name": "Character 1", "description": "A character from the story", "role": "Protagonist"},
                 {"name": "Character 2", "description": "Another character from the story", "role": "Supporting"},
                 {"name": "Character 3", "description": "A third character from the story", "role": "Antagonist"}
             ]
+    
+    def refine_characters(self, plot: str, previous_characters: List[Dict[str, Any]], feedback: str) -> List[Dict[str, Any]]:
+        """
+        Refines character descriptions based on human feedback.
+
+        Args:
+            plot (str): The original plot of the story
+            previous_characters (List[Dict[str, Any]]): The characters from the previous generation
+            feedback (str): Human feedback on how to improve the characters
+
+        Returns:
+            List[Dict[str, Any]]: Refined list of character details
+        """
+        print(f"Refining characters based on feedback...")
+        
+        previous_characters_str = json.dumps(previous_characters, indent=2)
+        
+        try:
+            
+            response = self.refine_generator.invoke({
+                "plot": plot,
+                "previous_characters": previous_characters_str,
+                "feedback": feedback
+            })
+            
+            refined_characters = [
+                {"name": char.name, "description": char.description, "role": char.role}
+                for char in response.characters
+            ]
+            
+            print("---REFINED CHARACTER DESCRIPTIONS AND ROLES---")
+            for character in refined_characters:
+                print(f"Name: {character['name']}")
+                print(f"Description: {character['description']}")
+                print(f"Role: {character['role']}")
+                print("------")
+            
+            return refined_characters
+                
+        except Exception as e:
+            print(f"Error refining characters: {str(e)}")
+            print("Returning original characters without changes.")
+            return previous_characters
 
 
 if __name__ == "__main__":
@@ -114,3 +227,10 @@ if __name__ == "__main__":
 
     characters = agent.generate_characters(plot)
     print("Generated Characters:", characters)
+    
+    feedback = input("\nEnter your feedback to refine the generated characters (press enter to skip): ")
+    if feedback.strip():
+        refined_characters = agent.refine_characters(plot, characters, feedback)
+        print("Refined Characters:", refined_characters)
+    else:
+        print("No feedback provided. Generated characters remain unchanged.")
