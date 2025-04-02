@@ -25,7 +25,6 @@ class Episode(BaseModel):
 
 class SplitStoryQuery(BaseModel):
     outline: str = Field(..., description="A general overview of the story's theme and direction.")
-    plots: List[str] = Field(..., description="A list of key plot points that should guide the narrative.")
     characters: List[dict] = Field(
         ..., 
         description="A list of character objects. Each object should contain at least 'name', 'description', and 'role'."
@@ -52,16 +51,13 @@ class StorySplitterAgent:
             "The final episode should have an empty cliffhanger field."
         )
         
-    def split_story(self, outline: str, plots: List[str], characters: List[dict], num_episodes: int = 5):
+    def split_story(self, detailed_plot: str, characters: List[dict], num_episodes: int = 5):
         """Generate episodes directly without structured output"""
         print(f"Generating {num_episodes} episodes for the story...")
         
         # Validate inputs to prevent errors
-        if not outline or not isinstance(outline, str):
-            outline = "A mysterious story with unexpected twists."
-        
-        if not plots or not isinstance(plots, list):
-            plots = ["Characters discover a secret", "A conflict arises", "Resolution is found"]
+        if not detailed_plot or not isinstance(detailed_plot, str):
+            detailed_plot = "A mysterious story with unexpected twists."
         
         if not characters or not isinstance(characters, list):
             characters = [
@@ -76,9 +72,7 @@ class StorySplitterAgent:
             direct_prompt = f"""
             Create exactly {num_episodes} sequential episodes for a story with the following details:
             
-            OUTLINE: {outline}
-            
-            PLOT POINTS: {json.dumps(plots)}
+            DETAILED PLOT: {detailed_plot}
             
             CHARACTERS: {json.dumps([{"name": c["name"], "role": c["role"]} for c in characters])}
             
@@ -107,9 +101,7 @@ class StorySplitterAgent:
             direct_prompt = f"""
             Split the following story into {num_episodes} episodes:
             
-            Story outline: {outline}
-            
-            Key plot points: {", ".join(plots)}
+            Story plot: {detailed_plot}
             
             Main characters: {", ".join([c["name"] + " (" + c["role"] + ")" for c in characters])}
             
@@ -134,7 +126,7 @@ class StorySplitterAgent:
         content = response.content if hasattr(response, 'content') else str(response)
         
         # Parse the response
-        episodes = self._parse_episodes(content, num_episodes, outline)
+        episodes = self._parse_episodes(content, num_episodes, detailed_plot)
         
         # Return the episodes
         return episodes
@@ -416,17 +408,10 @@ if __name__ == "__main__":
     # Test the splitter with sample data
     splitter = StorySplitterAgent()
     outline_text = "A mysterious struggle between light and dark unfolds in a haunted city where supernatural forces battle unseen foes."
-    plots_list = [
-        "The protagonists discover a hidden curse that links their past.",
-        "An ancient secret society emerges from the shadows.",
-        "Unexpected alliances and betrayals complicate the battle between good and evil.",
-        "A groundbreaking revelation alters the course of the conflict.",
-        "The final showdown culminates in a twist that redefines morality."
-    ]
     characters_list = [
         {"name": "Alice", "description": "A determined detective haunted by her past, driven by justice.", "role": "Protagonist"},
         {"name": "Victor", "description": "A conflicted priest caught between faith and duty, harboring deep secrets.", "role": "Supporting"},
         {"name": "Evelyn", "description": "A spectral figure with an enigmatic past, whose guidance is as eerie as it is pivotal.", "role": "Antagonist/Guide"}
     ]
-    episodes = splitter.split_story(outline_text, plots_list, characters_list, num_episodes=5)
+    episodes = splitter.split_story(outline_text, characters_list, num_episodes=5)
     print("Generated Episodes:", episodes)

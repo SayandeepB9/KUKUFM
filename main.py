@@ -13,7 +13,7 @@ load_dotenv()
 # Import local components
 from outline_generation_agent import OutlineGenerator
 from character_development_agent import CharacterDevelopmentAgent
-from plot_selector import StoryElementLibrary
+from plot_selector import PlotSelectorAgent
 from splitter_agent import StorySplitterAgent, Episode
 from enhancement import EpisodeLengtheningAgent
 from dialogue_generation_agent import DialogueAgent
@@ -262,31 +262,28 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     # Add human feedback loop for outline refinement
     outline = handle_outline_feedback(outline_generator, topic, outline)
     
-    # Convert outline to a single string for downstream use
-    outline_text = " ".join(outline)
+    # Step 2: Generate detailed plot from outline
+    print("\nStep 2/6: Developing detailed plot...")
+    plot_agent = PlotSelectorAgent()
+    plot_result = plot_agent.generate_plot(outline)
+    detailed_plot = plot_result.detailed_plot
+    literary_elements = plot_result.literary_elements
     
-    # Step 2: Generate characters
-    print("\nStep 2/6: Developing characters...")
+    print(f"\nGenerated detailed plot with literary elements: {', '.join([f'{k}: {v}' for k, v in literary_elements.items()])}")
+    
+    # Save the detailed plot
+    plot_filename = f"{story_dir}/detailed_plot.json"
+    plot_agent.save_plot(plot_result, plot_filename)
+    
+    # Step 3: Generate characters based on detailed plot
+    print("\nStep 3/6: Developing characters...")
     character_agent = CharacterDevelopmentAgent()
-    characters = character_agent.generate_characters(outline_text)
-    
-    # Step 3: Select plot elements
-    print("\nStep 3/6: Generating plot elements...")
-    plot_library = StoryElementLibrary()
-    plot_options = plot_library.generate_plot_options(outline_text, story_type)
-    
-    # Auto-select 3-5 plot points based on the number of episodes
-    num_plots = min(max(3, num_episodes - 2), 5)
-    selected_plots = plot_options[:num_plots]
-    
-    print(f"\nSelected {len(selected_plots)} plot elements automatically:")
-    for i, plot in enumerate(selected_plots, 1):
-        print(f"{i}. {plot}")
+    characters = character_agent.generate_characters(detailed_plot)
     
     # Step 4: Split into episodes
     print("\nStep 4/6: Splitting story into episodes...")
     splitter = StorySplitterAgent()
-    episodes = splitter.split_story(outline_text, selected_plots, characters, num_episodes=num_episodes)
+    episodes = splitter.split_story(detailed_plot, characters, num_episodes=num_episodes)
     
     # Step 5: Enhance episodes with lengthening - using parallel processing
     print("\nStep 5/6: Enhancing episodes with detailed content in parallel...")
@@ -419,8 +416,9 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
         "topic": topic,
         "story_type": story_type,
         "outline": outline,
+        "detailed_plot": detailed_plot,
+        "literary_elements": literary_elements,
         "characters": characters,
-        "plots": selected_plots,
         "episodes": episodes,
         "enhanced_episodes": serializable_enhanced_episodes,
         "dialogue": dialogues,

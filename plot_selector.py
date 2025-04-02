@@ -1,19 +1,39 @@
-from langchain.prompts import ChatPromptTemplate
-import os
 import json
-import datetime
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+import os
+from langchain_core.prompts import ChatPromptTemplate
 from llm_api import llm_api, get_model_from_config
-import yaml
+from pydantic import BaseModel, Field
 
-class StoryElementLibrary:
-    """Library of story elements that provides plot options based on existing outlines."""
+class PlotResponse(BaseModel):
+    """Response model for plot generation."""
+    
+    detailed_plot: str = Field(
+        description="A detailed plot narrative that connects the outline events into a cohesive story."
+    )
+    
+    # Make literary_elements optional since we'll populate it after the LLM call
+    literary_elements: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="The literary elements incorporated into the plot."
+    )
+    
+    class Config:
+        # Explicitly set which fields are required to match OpenAI's expected format
+        json_schema_extra = {
+            "required": ["detailed_plot"]
+        }
+
+class PlotSelectorAgent:
+    """Agent that develops detailed plots from outlines using literary elements."""
     
     def __init__(self, api_key=None):
-        """Initialize the story element library."""
-        # Get the model type and name from config
-        self.model_type = "plot_selection"
+        """Initialize the plot selector agent."""
+        # Set model type for plot development
+        self.model_type = "plot_development"
+        
+        # Get the model from config or use default
         self.model_name = get_model_from_config(self.model_type)
         
         # Initialize LLM using the llm_api function
@@ -23,255 +43,150 @@ class StoryElementLibrary:
             streaming=False
         )
         
-        # Load plot twists from config or use defaults
-        self.plot_twists = self._load_plot_twists()
+        # Create structured output version of the LLM
+        # Explicitly specify the function_calling method to avoid schema issues
+        self.structured_llm = self.llm.with_structured_output(
+            PlotResponse,
+            method="function_calling"
+        )
         
-        # Initialize the plot options prompt
+        # Load literary elements
+        self.story_elements = self._load_story_elements()
+        
+        # Define prompt for plot development
         self.system_prompt = (
-            "You are a creative writing assistant that specializes in providing plot options "
-            "based on a story outline. Generate 8 distinct and creative plot options that would work well "
-            "with the provided outline. Each plot option should be a complete plot point that could be "
-            "inserted into the story. Format your response as a JSON array of strings, where each string "
-            "is a single plot option. Make each option distinct and creative. Consider the story type "
-            "and outline themes when generating plot options."
+            "You are an expert storyteller specializing in developing compelling plots. "
+            "Your task is to take a story outline (a sequence of key events) and expand it into a "
+            "rich, detailed plot that connects these events in an engaging way. "
+            "\n\nIncorporate the assigned literary elements seamlessly into your plot development. "
+            "Show how characters evolve, how tension builds between events, and how each outline point "
+            "connects to the next in a logical but surprising way."
+            "\n\nCreate a plot that is specific, vivid, and internally consistent, while "
+            "maintaining the core events from the original outline. Imagine the connective tissue "
+            "between major events - what must happen to get from one point to the next."
+            "\n\nYour response should be a detailed plot description (at least 500 words) that "
+            "brings the outline to life through these literary elements, providing a roadmap "
+            "for how the story will unfold."
         )
         
         self.human_prompt = (
-            "Story Type: {story_type}\nOutline: {outline}\n\n"
-            "Please provide 10 engaging plot options that could enhance this story. "
-            "Return your response as a JSON array of strings."
+            "STORY OUTLINE:\n{outline_str}\n\n"
+            "SELECTED LITERARY ELEMENTS TO INCORPORATE:\n"
+            "{literary_elements_str}\n\n"
+            "Please develop a detailed plot that connects all the outline events while incorporating "
+            "these randomly selected literary elements. Show how the story progresses logically from one event to the next, "
+            "while building tension and character development throughout."
         )
         
-        self.plot_options_prompt = ChatPromptTemplate.from_messages([
+        # Set up the prompt template
+        self.plot_development_prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
             ("human", self.human_prompt)
         ])
         
-        self.plot_options_chain = self.plot_options_prompt | self.llm
-        
-        # Store selected plot options
-        self.selected_plot_options = []
-
-    def _load_plot_twists(self):
-        """Load plot twists from a config file if available, otherwise use defaults."""
+        # Create the chain
+        self.plot_development_chain = self.plot_development_prompt | self.structured_llm
+    
+    def _load_story_elements(self) -> Dict[str, List[str]]:
+        """Load story elements from JSON file."""
         try:
-            config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
-            with open(config_path, 'r') as file:
-                config = yaml.safe_load(file)
-                if 'plot_twists' in config:
-                    return config['plot_twists']
+            # Try to load from the current directory
+            file_path = "story_elements.json"
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    data = json.load(file)
+                    return data.get("literary_elements", {})
         except Exception as e:
-            print(f"Using default plot twists: {e}")
+            print(f"Error loading story elements: {e}")
+            # Return empty dictionary if file loading fails
+            return {}
+    
+    def _select_random_elements(self) -> Dict[str, str]:
+        """Randomly select which categories to include and a random element from each chosen category."""
+        # Get all available categories
+        categories = list(self.story_elements.keys())[:5]
         
-        # Default plot twists if config loading fails
-        return {
-            "general": [
-                "The protagonist discovers they've been misled the entire time",
-                "A trusted ally is revealed to be working against the protagonist",
-                "The antagonist is revealed to be a family member",
-                "A seemingly unimportant character is revealed as the mastermind",
-                "Two timelines are revealed to be occurring simultaneously",
-                "The entire story is revealed to be a dream/hallucination",
-                "The protagonist and antagonist must work together to overcome a greater threat",
-                "A character believed dead returns at a crucial moment",
-                "A prophecy/prediction is fulfilled but in an unexpected way",
-                "A character's true identity is revealed, changing the story's context"
-            ],
-       
-            
+        # Randomly decide how many categories to include (at least 1, at most all)
+        num_categories = random.randint(2, len(categories))
+        
+        # Randomly select which categories to include
+        selected_categories = random.sample(categories, num_categories)
+        
+        # For each selected category, choose a random element
+        selected_elements = {}
+        for category in selected_categories:
+            if self.story_elements[category]:  # Only select if the category has elements
+                selected_elements[category] = random.choice(self.story_elements[category])
+        
+        return selected_elements
+    
+    def generate_plot(self, outline: List[str]) -> PlotResponse:
+        """Generate a detailed plot from the outline using random literary elements."""
+        # Format the outline as a string
+        outline_str = "\n".join([f"{i+1}. {event}" for i, event in enumerate(outline)])
+        
+        # Select random literary elements
+        literary_elements = self._select_random_elements()
+        
+        # Print selected elements for reference
+        print("\n=== RANDOMLY SELECTED LITERARY ELEMENTS ===")
+        for category, element in literary_elements.items():
+            print(f"{category.capitalize()}: {element}")
+        
+        # Format literary elements as a string for the prompt
+        literary_elements_str = "\n".join([f"- {category.capitalize()}: {element}" for category, element in literary_elements.items()])
+        
+        # Prepare parameters for the prompt
+        params = {
+            "outline_str": outline_str,
+            "literary_elements_str": literary_elements_str
         }
-
-    def generate_plot_options(self, outline, story_type):
-        """Generate plot options that would enhance the outline."""
+        
         try:
-            print("\nGenerating plot options... (this may take a moment)\n")
+            print("\nGenerating detailed plot... (this may take a moment)\n")
             
-            # For GPT models, try using a different approach with clearer JSON formatting
-            if 'gpt' in self.model_name.lower():
-                response = self.llm.invoke(
-                    f"Generate 10 distinct and creative plot options for a {story_type} story with this outline: {outline}. "
-                    "Format your response ONLY as a JSON array of strings like this: [\"Option 1\", \"Option 2\", ...]. "
-                    "Do not include any other text or explanation in your response."
-                )
-            else:
-                response = self.plot_options_chain.invoke({
-                    "story_type": story_type,
-                    "outline": outline
-                })
+            # Invoke the LLM to generate the plot
+            response = self.plot_development_chain.invoke(params)
             
-            result_text = response.content if hasattr(response, 'content') else str(response)
+            # Create a new PlotResponse with both the generated plot and our literary elements
+            result = PlotResponse(
+                detailed_plot=response.detailed_plot,
+                literary_elements=literary_elements
+            )
             
-            # Try to parse the response as JSON
-            try:
-                # Find JSON in the response (it might be surrounded by other text)
-                import re
-                json_match = re.search(r'(\[[\s\S]*\])', result_text)
-                if json_match:
-                    cleaned_json = json_match.group(1)
-                    return json.loads(cleaned_json)
-                else:
-                    # If JSON pattern not found, try to parse the whole response
-                    return json.loads(result_text)
-            except json.JSONDecodeError:
-                # If JSON parsing fails, try to extract plot options with regex
-                print("Could not parse LLM response as JSON. Using fallback parsing method.")
-                
-                # Fallback: Try to extract numbered or bulleted items
-                plot_options = []
-                
-                # Look for numbered items
-                lines = result_text.split('\n')
-                for line in lines:
-                    # Remove numbers, bullets, etc. at the beginning of lines
-                    import re
-                    cleaned_line = re.sub(r'^[\d\-\*\.\s]+', '', line).strip()
-                    if cleaned_line and len(cleaned_line) > 10:  # Minimum length to be a plot option
-                        plot_options.append(cleaned_line)
-                
-                # Look for quoted strings
-                if not plot_options:
-                    quotes = re.findall(r'\"(.*?)\"', result_text)
-                    for quote in quotes:
-                        if len(quote) > 10:  # Minimum length to be a plot option
-                            plot_options.append(quote)
-                
-                if plot_options:
-                    return plot_options
-                else:
-                    print("Fallback parsing also failed. Using story element library.")
-                    return self._create_fallback_plot_options(story_type)
-                
+            return result
+            
         except Exception as e:
-            print(f"Error generating plot options: {str(e)}")
-            return self._create_fallback_plot_options(story_type)
+            print(f"Error generating plot: {e}")
+            # Create a PlotResponse object with error information
+            return PlotResponse(
+                detailed_plot=f"Error generating plot. Please try again. Error: {str(e)}",
+                literary_elements=literary_elements
+            )
     
-    def _create_fallback_plot_options(self, story_type):
-        """Create fallback plot options when LLM response parsing fails."""
-        # Use the story element library to generate plot options
-        if story_type in self.plot_twists:
-            return self.plot_twists[story_type]
-        else:
-            return self.plot_twists["general"]
-
-    def display_plot_options(self, plot_options):
-        """Display plot options in a numbered format."""
-        print("\n=== AVAILABLE PLOT OPTIONS ===\n")
-        
-        for i, option in enumerate(plot_options, 1):
-            print(f"Option {i}: {option}")
-    
-    def select_plot_options(self, plot_options):
-        """Allow user to select plot options."""
-        print("\n=== SELECT PLOT OPTIONS ===")
-        print("Enter the numbers of the options you want to use, separated by commas.")
-        print("For example, enter '1,3,5' to select options 1, 3, and 5.")
-        
-        while True:
-            try:
-                selection = input("Select options: ")
-                
-                # Handle empty input
-                if not selection.strip():
-                    print("No options selected. Please try again.")
-                    continue
-                
-                # Parse the selection
-                selected_indices = [int(idx.strip()) for idx in selection.split(',')]
-                
-                # Validate the selection
-                valid_indices = []
-                for idx in selected_indices:
-                    if 1 <= idx <= len(plot_options):
-                        valid_indices.append(idx)
-                    else:
-                        print(f"Invalid option {idx}. Ignoring.")
-                
-                if not valid_indices:
-                    print("No valid options selected. Please try again.")
-                    continue
-                
-                # Get the selected options
-                selected_options = [plot_options[idx-1] for idx in valid_indices]
-                self.selected_plot_options = selected_options
-                
-                return selected_options
-                
-            except ValueError:
-                print("Please enter valid numbers separated by commas.")
-    
-    def save_selected_options(self, selected_options, filename=None):
-        """Save the selected plot options to a file."""
-        if not selected_options:
-            print("No plot options to save.")
-            return None
-        
+    def save_plot(self, plot_data: PlotResponse, filename: str = None) -> str:
+        """Save the generated plot to a JSON file."""
         if not filename:
+            import datetime
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"selected_plot_options_{timestamp}.json"
+            filename = f"plot_{timestamp}.json"
         
         try:
-            with open(filename, "w", encoding="utf-8") as f:
-                json.dump(selected_options, f, indent=2, ensure_ascii=False)
-            print(f"\nSelected plot options saved to {filename}")
+            # Convert PlotResponse to dict for JSON serialization
+            plot_dict = plot_data.model_dump()
+            
+            with open(filename, 'w', encoding='utf-8') as file:
+                json.dump(plot_dict, file, indent=2, ensure_ascii=False)
+            print(f"\nPlot saved to {filename}")
             return filename
         except Exception as e:
-            print(f"Error saving plot options: {str(e)}")
+            print(f"Error saving plot: {e}")
             return None
 
-
-def extract_outline_from_input(input_text):
-    """Extract outline list from input text if necessary."""
-    # Check if input is already a list
-    if isinstance(input_text, list):
-        return input_text
-    
-    try:
-        parsed = json.loads(input_text)
-        if isinstance(parsed, list):
-            return parsed
-    except:
-        pass
-    
-    try:
-        import ast
-        parsed = ast.literal_eval(input_text)
-        if isinstance(parsed, list):
-            return parsed
-    except:
-        pass
-    
-    # Try to extract bracketed content
-    import re
-    match = re.search(r'\[(.*?)\]', input_text, re.DOTALL)
-    if match:
-        # Parse the bracketed content
-        content = match.group(1)
-        items = []
-        for item in re.findall(r'\'(.*?)\'', content):
-            items.append(item)
-        if items:
-            return items
-    
-    # Split by newlines and clean up
-    lines = input_text.strip().split('\n')
-    cleaned_lines = []
-    for line in lines:
-        # Remove leading numbers or bullets
-        cleaned = re.sub(r'^[\d\.\-\*]+\s*', '', line).strip()
-        if cleaned:
-            cleaned_lines.append(cleaned)
-    
-    return cleaned_lines
-
-
 def main():
+    """Main function to run the plot selector agent."""
     # Display header
-    current_datetime = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    current_user = os.getenv("USER", "Unknown")
-    
-    print(f"Current Date and Time: {current_datetime}")
-    print(f"Current User: {current_user}")
-    print("\n=== STORY PLOT OPTIONS SELECTOR ===")
+    print("\n=== PLOT SELECTOR AGENT ===\n")
     
     # Get API key from environment or config
     api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY")
@@ -280,53 +195,64 @@ def main():
         api_key = input("> ")
     
     try:
-        # Initialize the story element library
-        library = StoryElementLibrary(api_key=api_key)
+        # Initialize the plot selector agent
+        plot_agent = PlotSelectorAgent(api_key=api_key)
         
-        # Get the story type
-        print("\nPlease specify the story type (e.g., ghost, sci-fi, fantasy, mystery, etc.):")
-        story_type = input("> ").lower()
+        # Sample outline for testing
+        sample_outline = [
+            'Guests arrive at the hotel for a mysterious conference',
+            'The guests experience strange occurrences in their rooms',
+            "The hotel's dark past is revealed through a series of eerie hints",
+            'The guests begin to disappear one by one',
+            'The main character discovers a hidden room with a terrifying secret',
+            "The hotel's ghostly presence becomes increasingly aggressive",
+            'The main character must escape the hotel alive'
+        ]
         
-        # Get the outline
-        print("\nPlease paste your story outline (in list format):")
-        outline_input = input("> ")
+        # Ask if user wants to use sample outline or input their own
+        print("Would you like to use the sample outline about the mysterious hotel? (y/n)")
+        use_sample = input("> ").lower().startswith('y')
         
-        # Parse the outline from input
-        outline = extract_outline_from_input(outline_input)
+        if use_sample:
+            outline = sample_outline
+            print("\nUsing sample outline:")
+            for i, event in enumerate(outline, 1):
+                print(f"{i}. {event}")
+        else:
+            # Get outline from user
+            print("\nPlease enter your story outline events, one per line.")
+            print("Enter an empty line when finished.")
+            
+            outline = []
+            i = 1
+            while True:
+                event = input(f"{i}. ")
+                if not event:
+                    break
+                outline.append(event)
+                i += 1
         
         if not outline:
-            print("Could not parse a valid outline. Please check your input format.")
-            return
+            print("No outline provided. Using sample outline.")
+            outline = sample_outline
         
-        print("\nParsed Outline:")
-        for i, point in enumerate(outline, 1):
-            print(f"{i}. {point}")
+        # Generate plot
+        plot_result = plot_agent.generate_plot(outline)
         
-        # Generate plot options
-        plot_options = library.generate_plot_options(outline, story_type)
+        # Display the detailed plot
+        print("\n=== GENERATED PLOT ===\n")
+        print(plot_result.detailed_plot)
         
-        if not plot_options:
-            print("Could not generate plot options. Please try again.")
-            return
+        # Ask if user wants to save the plot
+        print("\nWould you like to save this plot? (y/n)")
+        save_plot = input("> ").lower().startswith('y')
         
-        # Display plot options
-        library.display_plot_options(plot_options)
-        
-        # Allow user to select options
-        selected_options = library.select_plot_options(plot_options)
-        
-        # Display final selected options
-        print("\n=== SELECTED PLOT OPTIONS ===")
-        for i, option in enumerate(selected_options, 1):
-            print(f"{i}. {option}")
-        
-        # Save the selected options
-        library.save_selected_options(selected_options)
+        if save_plot:
+            plot_agent.save_plot(plot_result)
         
     except Exception as e:
         print(f"\nAn unexpected error occurred: {str(e)}")
         print("Please check your API key and internet connection, then try again.")
-
 
 if __name__ == "__main__":
     main()
