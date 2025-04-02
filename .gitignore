@@ -5,3 +5,4 @@ generated_stories/
 *.env
 output_story/
 stories/
+*.zip

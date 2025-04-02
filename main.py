@@ -15,6 +15,7 @@ from plot_selector import StoryElementLibrary
 from splitter_agent import StorySplitterAgent, Episode
 from enhancement import EpisodeLengtheningAgent
 from dialogue_generation_agent import DialogueAgent
+from translator_agent import TranslatorAgent
 from llm_api import llm_api
 
 def load_config():
@@ -146,7 +147,55 @@ def save_final_story(story_data, story_dir):
     print(f"\nFinal story saved to {filename}")
     return filename
 
-def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
+def handle_outline_feedback(outline_generator, topic, outline):
+    """Handle human feedback for refining the story outline"""
+    while True:
+        satisfaction = input("\nAre you satisfied with this outline? (yes/no): ").strip().lower()
+        
+        if satisfaction in ['y', 'yes']:
+            print("Great! Proceeding with the current outline.")
+            return outline
+        elif satisfaction in ['n', 'no']:
+            feedback = input("\nPlease provide feedback on how to improve the outline: ")
+            print(f"\nRefining outline based on feedback: '{feedback}'")
+            
+            # Use the refine_outline method to improve the outline
+            refined_outline = outline_generator.refine_outline(topic, outline, feedback)
+            
+            # Show the refined outline to the user
+            print("\nRefined outline:")
+            for i, event in enumerate(refined_outline, 1):
+                print(f"{i}. {event}")
+                
+            # Update the outline
+            outline = refined_outline
+        else:
+            print("Please enter 'yes' or 'no'.")
+            continue
+
+def translate_story(story_file, target_language, story_dir):
+    """Translate the final story to the target language"""
+    print(f"\nTranslating story to {target_language}...")
+    
+    # Read the content of the final story
+    with open(story_file, 'r', encoding='utf-8') as f:
+        story_content = f.read()
+    
+    # Initialize translator agent
+    translator = TranslatorAgent()
+    
+    # Translate the story
+    translated_content = translator.translate_story(story_content, target_language)
+    
+    # Save the translated content to a new file
+    translated_file = os.path.join(story_dir, f"final_story_{target_language.lower()}.md")
+    with open(translated_file, 'w', encoding='utf-8') as f:
+        f.write(translated_content)
+    
+    print(f"Translated story saved to: {translated_file}")
+    return translated_file
+
+def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_language=None):
     """Run the complete story generation pipeline"""
     print(f"\n=== Generating story for topic: '{topic}' ===\n")
     
@@ -157,6 +206,9 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     print("Step 1/6: Generating story outline...")
     outline_generator = OutlineGenerator()
     outline = outline_generator.generate_outline(topic)
+    
+    # Add human feedback loop for outline refinement
+    outline = handle_outline_feedback(outline_generator, topic, outline)
     
     # Convert outline to a single string for downstream use
     outline_text = " ".join(outline)
@@ -284,11 +336,19 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general"):
     # Save the final publishable story
     final_story_file = save_final_story(story_data, story_dir)
     
+    # Step 7 (Optional): Translate the final story if a target language is specified
+    translated_file = None
+    if target_language:
+        translated_file = translate_story(final_story_file, target_language, story_dir)
+    
     print("\n=== Story generation complete! ===")
     print(f"Generated {len(episodes)} episodes with {len(characters)} characters")
     print(f"Enhanced {len(enhanced_episodes)} episodes with detailed content")
     print(f"Generated dialogue for {len(dialogues)} episodes")
     print(f"All story files saved to directory: {story_dir}")
+    
+    if translated_file:
+        print(f"Story translated to {target_language} and saved to: {translated_file}")
     
     return story_data, story_dir
 
@@ -298,6 +358,7 @@ def main():
     parser.add_argument("topic", help="Topic or theme for the story")
     parser.add_argument("--episodes", type=int, default=5, help="Number of episodes (default: 5)")
     parser.add_argument("--type", default="general", help="Story type (e.g., mystery, sci-fi, fantasy)")
+    parser.add_argument("--translate", help="Translate the final story to this language (e.g., Hindi, French, Spanish)")
     
     args = parser.parse_args()
     
@@ -317,7 +378,12 @@ def main():
     
     # Generate the story
     try:
-        story_data, story_dir = generate_story_pipeline(args.topic, args.episodes, args.type)
+        story_data, story_dir = generate_story_pipeline(
+            args.topic, 
+            args.episodes, 
+            args.type, 
+            args.translate
+        )
         # Return both story data and directory for potential further processing
     except Exception as e:
         print(f"Error generating story: {e}")
