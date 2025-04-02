@@ -17,7 +17,7 @@ This project leverages Large Language Models (LLMs) to create compelling narrati
 - **Multilingual Support**: Translate stories to different languages
 - **Human Feedback Loop**: Iteratively improve outlines based on human input
 
-## Components
+## Components2
 
 The system consists of several specialized agents:
 
