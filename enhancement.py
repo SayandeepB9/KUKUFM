@@ -83,10 +83,13 @@ class EpisodeLengtheningAgent:
             [
                 ("system", 
                  "You are a master storyteller with the ability to expand narrative content effectively. "
-                 "Your task is to take an already lengthened episode and double its size by adding more "
+                 "Your task is to take an episode and double its size by adding more "
                  "descriptive elements, character development, scene elaboration, and narrative depth. "
                  "Maintain complete coherence with the original content while making the story richer and more engaging. "
-                 "The final content should seamlessly incorporate the original material."),
+                 "The final content should seamlessly incorporate the original material."
+                 "Try to make the size of each sentence double or even more by splitting it and adding more elements."
+                 "You should add random things in the middle that do not play much role in the story but make the story more engaging and longer."
+                 ),
                 ("human", 
                  "Please take this episode content and double its length by adding more details, descriptions, and depth.\n\n"
                  "Episode Number: {episode_number}\n"
