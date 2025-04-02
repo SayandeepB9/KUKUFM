@@ -41,7 +41,7 @@ class CharacterDevelopmentAgent:
         
         self.system_prompt = f"""You are an expert at developing story characters.
         
-        Given a plot, generate detailed descriptions and roles for 3-5 distinctive Indian characters in the story.
+        Given a plot, generate detailed descriptions and roles for distinctive characters in the story.
         
         For each character, include:
         1. A unique and fitting name (name)
@@ -65,7 +65,7 @@ class CharacterDevelopmentAgent:
         
         self.character_prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
-            ("human", """Generate 3-5 character descriptions for the following plot.
+            ("human", """Generate characters descriptions for the following plot.
             
 Plot: {plot}
 
@@ -80,23 +80,45 @@ Return them in the 'characters' field as structured data.""")
         # Chain the prompt with the structured output LLM
         self.character_generator = self.character_prompt | self.structured_llm_characters
         
+        # Add refinement prompt
+        self.refine_prompt = ChatPromptTemplate.from_messages([
+            ("system", self.system_prompt),
+            ("human", """Here is the previously generated character output for the plot:
+Plot: {plot}
+
+Previous Characters:
+{previous_characters}
+
+Human Feedback:
+{feedback}
+
+Please refine the character descriptions and roles based on the above feedback.
+Consider which character types would best serve this story from the list provided.
+Create characters with depth, nuance, and clear motivations.
+
+Return them in the 'characters' field as structured data.""")
+        ])
+        
+        # Chain the refine prompt with the structured output LLM
+        self.refine_generator = self.refine_prompt | self.structured_llm_characters
+        
     def load_character_types(self):
         """Load character types from the story elements library JSON file"""
         try:
             # Find the story_elements.json file
             file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "story_elements.json")
             
-            # If not found in the script directory, try a relative path
+            
             if not os.path.exists(file_path):
                 file_path = "story_elements.json"
                 
             with open(file_path, 'r') as f:
                 story_elements = json.load(f)
                 
-            # Extract character types from the JSON
+            
             character_types = story_elements.get("literary_elements", {}).get("characters", [])
             
-            # If we successfully loaded character types
+            
             if character_types:
                 print(f"Loaded {len(character_types)} character types from story elements library")
                 return character_types
@@ -128,10 +150,9 @@ Return them in the 'characters' field as structured data.""")
         print(f"Generating characters for plot: {plot[:50]}...")
         
         try:
-            # Generate characters using the structured output chain
+           
             response = self.character_generator.invoke({"plot": plot})
             
-            # Extract characters from the response
             characters = [
                 {"name": char.name, "description": char.description, "role": char.role}
                 for char in response.characters
@@ -148,12 +169,55 @@ Return them in the 'characters' field as structured data.""")
                 
         except Exception as e:
             print(f"Error generating characters: {str(e)}")
-            # Fallback characters in case of an error
+
             return [
                 {"name": "Character 1", "description": "A character from the story", "role": "Protagonist"},
                 {"name": "Character 2", "description": "Another character from the story", "role": "Supporting"},
                 {"name": "Character 3", "description": "A third character from the story", "role": "Antagonist"}
             ]
+    
+    def refine_characters(self, plot: str, previous_characters: List[Dict[str, Any]], feedback: str) -> List[Dict[str, Any]]:
+        """
+        Refines character descriptions based on human feedback.
+
+        Args:
+            plot (str): The original plot of the story
+            previous_characters (List[Dict[str, Any]]): The characters from the previous generation
+            feedback (str): Human feedback on how to improve the characters
+
+        Returns:
+            List[Dict[str, Any]]: Refined list of character details
+        """
+        print(f"Refining characters based on feedback...")
+        
+        previous_characters_str = json.dumps(previous_characters, indent=2)
+        
+        try:
+            
+            response = self.refine_generator.invoke({
+                "plot": plot,
+                "previous_characters": previous_characters_str,
+                "feedback": feedback
+            })
+            
+            refined_characters = [
+                {"name": char.name, "description": char.description, "role": char.role}
+                for char in response.characters
+            ]
+            
+            print("---REFINED CHARACTER DESCRIPTIONS AND ROLES---")
+            for character in refined_characters:
+                print(f"Name: {character['name']}")
+                print(f"Description: {character['description']}")
+                print(f"Role: {character['role']}")
+                print("------")
+            
+            return refined_characters
+                
+        except Exception as e:
+            print(f"Error refining characters: {str(e)}")
+            print("Returning original characters without changes.")
+            return previous_characters
 
 
 if __name__ == "__main__":
@@ -163,3 +227,10 @@ if __name__ == "__main__":
 
     characters = agent.generate_characters(plot)
     print("Generated Characters:", characters)
+    
+    feedback = input("\nEnter your feedback to refine the generated characters (press enter to skip): ")
+    if feedback.strip():
+        refined_characters = agent.refine_characters(plot, characters, feedback)
+        print("Refined Characters:", refined_characters)
+    else:
+        print("No feedback provided. Generated characters remain unchanged.")

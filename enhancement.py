@@ -24,8 +24,7 @@ class EpisodeLengtheningAgent:
         self.parser = PydanticOutputParser(pydantic_object=LengthenedEpisode)
         
         self.system_prompt = (
-            
-            "REMEBER YOU HAVE TO MAKE IT OF 10k WORDS"
+            "REMEMBER YOU HAVE TO MAKE IT OF 10k WORDS"
             "You are a master storyteller specializing in rich, detailed narratives. "
             "Your task is to significantly expand an episode outline into a complete story "
             "of approximately 10k words. You must maintain perfect continuity with "
@@ -34,7 +33,13 @@ class EpisodeLengtheningAgent:
             "You must also seamlessly set up elements that will be important in future episodes "
             "to maintain narrative coherence across the entire story arc. "
             "If this episode should end with a cliffhanger, make sure your expanded content "
-            "builds properly toward it. "
+            "builds properly toward it."
+            
+            "Utilize the provided character details to create rich character development "
+            "throughout the narrative. Incorporate their personalities, backstories, motivations, "
+            "and unique traits as described in their profiles. Make sure each character's actions "
+            "and reactions are consistent with their established personality and role in the story."
+            
             "Add depth through detailed scene descriptions, character development, "
             "and rich world-building, all while maintaining the original plot points "
             "and tone. Keep the narrative engaging throughout the extended length."
@@ -54,8 +59,10 @@ class EpisodeLengtheningAgent:
                  "Episode Outline: {episode_outline}\n"
                  "Should End With Cliffhanger: {include_cliffhanger}\n"
                  "Future Episodes Outlines: {future_episodes_outlines}\n\n"
+                 "Character Details:\n{character_details}\n\n"
                  "Expand this episode by creating a richly detailed narrative with extended descriptions, "
-                 "character insights, and world-building elements. "
+                 "character insights, and world-building elements. Make sure to incorporate all the characters "
+                 "in ways that are consistent with their descriptions, roles, and motivations."
                  "Ensure you maintain the original plot direction while building toward the established "
                  "cliffhanger if one is required. If there was a previous cliffhanger, your "
                  "expanded narrative should address and resolve it naturally.\n\n"
@@ -63,13 +70,105 @@ class EpisodeLengtheningAgent:
                  "ensuring a seamless transition between this episode and future ones.\n\n"
                  "Respond with the lengthened story content only, without any introductory text or explanations."
                  "Your response should have a totally narrative tone, as if the entire thing is presented by a narrator and no dialogues should be there.\n\n"
-                 "Ensure that the episode is very long as already mentioned and should contain atleast 10k words.\n\n"
+                 "Ensure that the episode is very long as already mentioned and should contain at least 10k words.\n\n"
                 ),
             ]
         )
         
         # Create the chain without structured output
         self.episode_lengthener = self.lengthen_prompt | self.llm
+
+        # Add a new prompt for doubling the content size
+        self.double_size_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", 
+                 "You are a master storyteller with the ability to expand narrative content effectively. "
+                 "Your task is to take an already lengthened episode and double its size by adding more "
+                 "descriptive elements, character development, scene elaboration, and narrative depth. "
+                 "Maintain complete coherence with the original content while making the story richer and more engaging. "
+                 "The final content should seamlessly incorporate the original material."),
+                ("human", 
+                 "Please take this episode content and double its length by adding more details, descriptions, and depth.\n\n"
+                 "Episode Number: {episode_number}\n"
+                 "Episode Title: {episode_title}\n"
+                 "Current Content: {current_content}\n\n"
+                 "Previous Episodes Summary: {previous_episodes_summary}\n"
+                 "Previous Cliffhanger: {previous_cliffhanger}\n"
+                 "Episode Outline: {episode_outline}\n"
+                 "Character Details: {character_details}\n\n"
+                 "Ensure that you maintain the same plot points and narrative flow while expanding the content. "
+                 "Add more sensory details, deeper character thoughts and motivations, extended scene descriptions, "
+                 "and more elaborate world-building. Don't contradict anything in the original content.\n\n"
+                 "Your response should be at least twice as long as the original and should include all the events "
+                 "from the original with expanded detail.\n\n"
+                 "Respond with only the expanded content, without introduction or explanation."
+                ),
+            ]
+        )
+        
+        # Chain for doubling content size
+        self.episode_doubler = self.double_size_prompt | self.llm
+    
+    def double_episode_size(self, 
+                            episode_title: str,
+                            episode_number: int,
+                            current_content: str,
+                            episode_outline: str,
+                            previous_episodes_summary: str,
+                            previous_cliffhanger: str = "",
+                            characters: List[Dict[str, Any]] = None):
+        """
+        Double the size of an already lengthened episode by adding more details and depth
+        
+        Args:
+            episode_title: Title of the current episode
+            episode_number: Number of the current episode
+            current_content: The current lengthened content to expand further
+            episode_outline: Brief outline/summary of the current episode
+            previous_episodes_summary: Summary of all previous episodes
+            previous_cliffhanger: The cliffhanger from the previous episode
+            characters: List of character details to incorporate in the episode
+            
+        Returns:
+            str: The expanded content, now approximately twice as long
+        """
+        try:
+            # Format character details for the prompt
+            character_details = ""
+            if characters:
+                for i, char in enumerate(characters, 1):
+                    character_details += f"Character {i}: {char['name']} - {char['role']}\n"
+                    character_details += f"Description: {char['description']}\n\n"
+            else:
+                character_details = "No specific character details provided."
+            
+            # Prepare input data
+            input_data = {
+                "episode_title": episode_title,
+                "episode_number": episode_number,
+                "current_content": current_content,
+                "previous_episodes_summary": previous_episodes_summary,
+                "previous_cliffhanger": previous_cliffhanger,
+                "episode_outline": episode_outline,
+                "character_details": character_details
+            }
+            
+            # Get expanded content
+            result = self.episode_doubler.invoke(input_data)
+            expanded_content = result.content
+            
+            # Calculate word counts for comparison
+            original_word_count = len(current_content.split())
+            new_word_count = len(expanded_content.split())
+            
+            print(f"Episode {episode_number} expanded from {original_word_count} to {new_word_count} words")
+            
+            return expanded_content
+            
+        except Exception as e:
+            print(f"Error doubling episode size: {str(e)}")
+            # Return the original content if expansion fails
+            return current_content
     
     def lengthen_episode(self, 
                          episode_title: str,
@@ -78,7 +177,8 @@ class EpisodeLengtheningAgent:
                          previous_episodes_summary: str,
                          previous_cliffhanger: str = "",
                          include_cliffhanger: bool = True,
-                         future_episodes_outlines: str = ""):
+                         future_episodes_outlines: str = "",
+                         characters: List[Dict[str, Any]] = None):
         """
         Lengthen an episode based on its outline, previous content, and future episode outlines
         
@@ -90,11 +190,21 @@ class EpisodeLengtheningAgent:
             previous_cliffhanger (str): The cliffhanger from the previous episode that needs resolution
             include_cliffhanger (bool): Whether this episode should end with a cliffhanger
             future_episodes_outlines (str): Outlines of future episodes to help maintain continuity
+            characters (List[Dict]): List of character details to incorporate in the episode
             
         Returns:
             LengthenedEpisode: The expanded episode
         """
         try:
+            # Format character details for the prompt
+            character_details = ""
+            if characters:
+                for i, char in enumerate(characters, 1):
+                    character_details += f"Character {i}: {char['name']} - {char['role']}\n"
+                    character_details += f"Description: {char['description']}\n\n"
+            else:
+                character_details = "No specific character details provided."
+            
             input_data = {
                 "episode_title": episode_title,
                 "episode_number": episode_number,
@@ -102,12 +212,41 @@ class EpisodeLengtheningAgent:
                 "previous_cliffhanger": previous_cliffhanger,
                 "episode_outline": episode_outline,
                 "include_cliffhanger": "Yes" if include_cliffhanger else "No",
-                "future_episodes_outlines": future_episodes_outlines
+                "future_episodes_outlines": future_episodes_outlines,
+                "character_details": character_details
             }
             
             # Instead of using structured output, get the raw content
             result = self.episode_lengthener.invoke(input_data)
             lengthened_content = result.content
+            
+            # Check word count and expand if necessary
+            word_count = len(lengthened_content.split())
+            print(f"Initial episode {episode_number} length: {word_count} words")
+            
+            # Keep expanding the content until it reaches the minimum threshold
+            expansion_attempts = 0
+            max_attempts = 3  # Limit the number of expansion attempts to prevent infinite loops
+            
+            while word_count < 7000 and expansion_attempts < max_attempts:
+                print(f"Content too short ({word_count} words). Expanding episode {episode_number}...")
+                
+                # Use the double_episode_size function to expand the content
+                lengthened_content = self.double_episode_size(
+                    episode_title=episode_title,
+                    episode_number=episode_number,
+                    current_content=lengthened_content,
+                    episode_outline=episode_outline,
+                    previous_episodes_summary=previous_episodes_summary,
+                    previous_cliffhanger=previous_cliffhanger,
+                    characters=characters
+                )
+                
+                # Recalculate word count
+                word_count = len(lengthened_content.split())
+                expansion_attempts += 1
+                
+                print(f"After expansion attempt {expansion_attempts}: {word_count} words")
             
             # Create the episode object manually
             episode = LengthenedEpisode(
@@ -117,8 +256,7 @@ class EpisodeLengtheningAgent:
                 cliffhanger=""  # We'll extract this in a real implementation if needed
             )
             
-            word_count = len(lengthened_content.split())
-            print(f"Episode {episode_number} lengthened to approximately {word_count} words")
+            print(f"Final episode {episode_number} length: {word_count} words")
             
             return episode
             
@@ -150,7 +288,7 @@ class EpisodeLengtheningAgent:
 
 
 if __name__ == "__main__":
-    print("Loading config from C:\\Users\\sagni\\OneDrive\\Desktop\\kukufm\\KUKUFM\\config.yaml")
+    print("Loading config...")
     try:
         with open("config.yaml", "r") as file:
             config = yaml.safe_load(file)
@@ -159,7 +297,7 @@ if __name__ == "__main__":
         print(f"Error loading config: {str(e)}")
         config = {}
 
-    print("OpenAI client initialized successfully\n")
+    print("Initializing agent...")
     
     try:
         # Initialize the agent
@@ -185,14 +323,22 @@ if __name__ == "__main__":
         Episode 5 - The Final Confrontation: Alice confronts the leader of the secret society and learns that Evelyn is connected to the original curse. A final showdown takes place at the town's oldest building where the curse began.
         """
         
-        # Generate the lengthened episode with future episodes context
+        # Add character details
+        characters = [
+            {"name": "Alice Morgan", "description": "A determined detective with a haunted past and a strong sense of justice. She has been having strange dreams since childhood that she now realizes might be connected to Ravenwood's history.", "role": "Protagonist"},
+            {"name": "Father Victor", "description": "A knowledgeable priest with connections to the town's darkest secrets. He appears helpful but might have his own agenda regarding the supernatural artifacts.", "role": "Supporting Character/Potential Ally"},
+            {"name": "Evelyn Gray", "description": "A mysterious woman who appears in visions and dreams. She lived in Ravenwood a century ago and seems to be tied to the origin of the curse.", "role": "Antagonist/Spirit"}
+        ]
+        
+        # Generate the lengthened episode with character details
         lengthened_episode = lengthener.lengthen_episode(
             episode_title=episode_title,
             episode_number=episode_number,
             episode_outline=episode_outline,
             previous_episodes_summary=previous_episodes_summary,
             previous_cliffhanger=previous_cliffhanger,
-            future_episodes_outlines=future_episodes_outlines
+            future_episodes_outlines=future_episodes_outlines,
+            characters=characters
         )
         
         # Save to file

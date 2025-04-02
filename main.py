@@ -175,6 +175,35 @@ def handle_outline_feedback(outline_generator, topic, outline):
             print("Please enter 'yes' or 'no'.")
             continue
 
+def handle_character_feedback(character_agent, plot, characters):
+    """Handle human feedback for refining the story characters"""
+    while True:
+        satisfaction = input("\nAre you satisfied with these characters? (yes/no): ").strip().lower()
+        
+        if satisfaction in ['y', 'yes']:
+            print("Great! Proceeding with the current characters.")
+            return characters
+        elif satisfaction in ['n', 'no']:
+            feedback = input("\nPlease provide feedback on how to improve the characters: ")
+            print(f"\nRefining characters based on feedback: '{feedback}'")
+            
+            # Use the refine_characters method to improve the characters
+            refined_characters = character_agent.refine_characters(plot, characters, feedback)
+            
+            # Show the refined characters to the user
+            print("\nRefined characters:")
+            for character in refined_characters:
+                print(f"Name: {character['name']}")
+                print(f"Description: {character['description']}")
+                print(f"Role: {character['role']}")
+                print("------")
+                
+            # Update the characters
+            characters = refined_characters
+        else:
+            print("Please enter 'yes' or 'no'.")
+            continue
+
 def translate_story(story_file, target_language, story_dir):
     """Translate the final story to the target language"""
     print(f"\nTranslating story to {target_language}...")
@@ -366,6 +395,9 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     character_agent = CharacterDevelopmentAgent()
     characters = character_agent.generate_characters(outline_text)
     
+    # Add human feedback loop for character refinement
+    characters = handle_character_feedback(character_agent, outline_text, characters)
+    
     # Step 3: Select plot elements
     print("\nStep 3/6: Generating plot elements...")
     plot_library = StoryElementLibrary()
@@ -413,7 +445,8 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
             "previous_episodes_summary": previous_episodes_summary,
             "previous_cliffhanger": previous_cliffhanger,
             "include_cliffhanger": bool(episode.cliffhanger),
-            "future_episodes_outlines": future_episodes_outlines
+            "future_episodes_outlines": future_episodes_outlines,
+            "characters": characters  # Pass the character data to the enhancement context
         }
         episode_contexts.append(context)
         
@@ -431,7 +464,8 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
             previous_episodes_summary=context["previous_episodes_summary"],
             previous_cliffhanger=context["previous_cliffhanger"],
             include_cliffhanger=context["include_cliffhanger"],
-            future_episodes_outlines=context["future_episodes_outlines"]
+            future_episodes_outlines=context["future_episodes_outlines"],
+            characters=context["characters"]  # Pass character data to the lengthening function
         )
         
         # Save to file within the story directory
