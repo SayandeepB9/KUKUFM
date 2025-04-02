@@ -247,6 +247,102 @@ def translate_story_parallel(story_file, target_languages, story_dir):
     
     return translated_files
 
+def translate_episodes_parallel(episodes, enhanced_episodes, dialogues, target_language, story_dir):
+    """
+    Translate individual episodes in parallel for a single target language.
+    
+    Args:
+        episodes: List of Episode objects
+        enhanced_episodes: Dict of enhanced episode content
+        dialogues: Dict of episode dialogues
+        target_language: Target language for translation
+        story_dir: Story directory to save translations
+        
+    Returns:
+        Dict containing translation results for each episode
+    """
+    print(f"\nTranslating {len(episodes)} episodes to {target_language} in parallel...")
+    
+    # Create a subdirectory for translated episodes
+    translated_dir = os.path.join(story_dir, f"translated_{target_language.lower()}")
+    os.makedirs(translated_dir, exist_ok=True)
+    
+    # Initialize translator agent
+    translator = TranslatorAgent()
+    
+    # Results container
+    translated_episodes = {}
+    
+    # Function to translate a single episode
+    def translate_episode(episode):
+        try:
+            # Get enhanced content if available
+            enhanced_content = enhanced_episodes.get(episode.number, {}).get('lengthened_content', episode.content)
+            dialogue_content = dialogues.get(episode.number, "")
+            
+            # Combine content for translation
+            episode_content = (
+                f"# Episode {episode.number}: {episode.title}\n\n"
+                f"{enhanced_content}\n\n"
+                f"## Dialogue\n\n{dialogue_content}"
+            )
+            
+            # Translate the content
+            translated_content = translator.translate_story(episode_content, target_language)
+            
+            # Save to file
+            output_file = os.path.join(
+                translated_dir, 
+                f"episode_{episode.number}_{target_language.lower()}.md"
+            )
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(translated_content)
+            
+            return episode.number, {
+                "translated_content": translated_content,
+                "file_path": output_file
+            }
+        except Exception as e:
+            print(f"Error translating episode {episode.number}: {e}")
+            return episode.number, {"error": str(e)}
+    
+    # Process translations in parallel
+    max_workers = min(10, len(episodes))  # Limit concurrent API calls
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all translation tasks
+        future_to_episode = {executor.submit(translate_episode, episode): episode for episode in episodes}
+        
+        # Process results as they complete
+        for future in tqdm(concurrent.futures.as_completed(future_to_episode), 
+                           total=len(episodes), 
+                           desc=f"Translating episodes to {target_language}"):
+            try:
+                episode_number, result = future.result()
+                translated_episodes[episode_number] = result
+                if "error" not in result:
+                    print(f"✓ Episode {episode_number} translated to {target_language}")
+                else:
+                    print(f"× Failed to translate episode {episode_number}: {result['error']}")
+            except Exception as e:
+                episode = future_to_episode[future]
+                print(f"× Error processing episode {episode.number}: {e}")
+    
+    # Create a combined translated file with all episodes
+    combined_file = os.path.join(story_dir, f"full_story_{target_language.lower()}.md")
+    
+    try:
+        with open(combined_file, 'w', encoding='utf-8') as f:
+            for episode in sorted(episodes, key=lambda e: e.number):
+                translation = translated_episodes.get(episode.number, {}).get('translated_content')
+                if translation:
+                    f.write(f"{translation}\n\n---\n\n")
+        
+        print(f"Combined translated story saved to: {combined_file}")
+    except Exception as e:
+        print(f"Error creating combined translation file: {e}")
+    
+    return translated_episodes
+
 def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_languages=None):
     """Run the complete story generation pipeline"""
     print(f"\n=== Generating story for topic: '{topic}' ===\n")
@@ -433,17 +529,37 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     # Save the final publishable story
     final_story_file = save_final_story(story_data, story_dir)
     
-    # Step 7 (Optional): Translate the final story to multiple languages if specified
+    # Step 7 (Optional): Translation handling
     translated_files = []
-    if target_languages:
-        if isinstance(target_languages, str):
-            # Single language case
-            translated_file = translate_story(final_story_file, target_languages, story_dir)
-            if translated_file:
-                translated_files.append((target_languages, translated_file))
-        else:
-            # Multiple languages case - translate in parallel
-            translated_files = translate_story_parallel(final_story_file, target_languages, story_dir)
+    
+    # Handle episode-by-episode translation for a single language
+    if target_languages and isinstance(target_languages, (list, tuple)) and len(target_languages) == 1:
+        target_language = target_languages[0]
+        print(f"\nStep 7/7: Translating episodes to {target_language} in parallel...")
+        translated_episodes = translate_episodes_parallel(
+            episodes, 
+            serializable_enhanced_episodes, 
+            dialogues, 
+            target_language, 
+            story_dir
+        )
+        if translated_episodes:
+            story_data["translations"] = {target_language: translated_episodes}
+            # Update the JSON file with translation data
+            with open(f"{story_dir}/story_data.json", 'w', encoding='utf-8') as f:
+                json.dump(story_data, f, indent=2, ensure_ascii=False, cls=StoryJSONEncoder)
+    
+    # Handle full story translation for multiple languages
+    elif target_languages and len(target_languages) > 1:
+        print(f"\nStep 7/7: Translating full story to multiple languages...")
+        translated_files = translate_story_parallel(final_story_file, target_languages, story_dir)
+    
+    # Handle single language as string (backward compatibility)
+    elif target_languages and isinstance(target_languages, str):
+        print(f"\nStep 7/7: Translating full story to {target_languages}...")
+        translated_file = translate_story(final_story_file, target_languages, story_dir)
+        if translated_file:
+            translated_files.append((target_languages, translated_file))
     
     print("\n=== Story generation complete! ===")
     print(f"Generated {len(episodes)} episodes with {len(characters)} characters")
@@ -451,7 +567,10 @@ def generate_story_pipeline(topic, num_episodes=5, story_type="general", target_
     print(f"Generated dialogue for {len(dialogues)} episodes")
     print(f"All story files saved to directory: {story_dir}")
     
-    if translated_files:
+    # Show translation results
+    if "translations" in story_data:
+        print(f"Episodes translated to {list(story_data['translations'].keys())[0]}")
+    elif translated_files:
         print(f"Story translated to {len(translated_files)} languages:")
         for language, file_path in translated_files:
             print(f"  - {language}: {os.path.basename(file_path)}")
