@@ -6,4 +6,7 @@ langchain_openai
 pyyaml
 openai
 tqdm
-concurrent-futures
+streamlit>=1.32.0
+matplotlib
+numpy
+pandas
