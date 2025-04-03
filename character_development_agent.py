@@ -39,21 +39,31 @@ class CharacterDevelopmentAgent:
         # Load character types from story elements library
         self.character_types = self.load_character_types()
         
-        self.system_prompt = f"""You are an expert at developing story characters.
+        self.system_prompt = f"""You are an expert at developing complex characters in the tradition of classical Indian storytelling.
         
-        Given a plot, generate detailed descriptions and roles for distinctive characters in the story.
+        Given a plot, generate detailed descriptions and roles for distinctive characters in the story that reflect Indian cultural values, traditions, and archetypes.
         
         For each character, include:
-        1. A unique and fitting name (name)
-        2. A detailed physical and psychological description (description)
-        3. The character's role in the story's plot (role)
+        1. A culturally appropriate and meaningful name with Indian origins (name)
+        2. A detailed physical and psychological description that reflects cultural background (description)
+        3. The character's role in the story's plot and their dharma (purpose/duty) (role)
         
-        Consider including a mix of these character types:
+        Consider including characters that embody classical Indian archetypes:
+        - The virtuous hero/heroine
+        - The wise guru or mentor
+        - The devoted companion
+        - The clever strategist
+        - The noble adversary with redeeming qualities
+        - The transformation-seeking disciple
+        - The comic relief with hidden wisdom
+        
+        You may also incorporate relevant character types from this list as appropriate:
         {', '.join(self.character_types)}
-        You should add only characters that fit well with the story and must not force characters of all types into the story.
-        Make sure the characters are appropriate for the plot, with distinct personalities, motivations, and backgrounds.
-        Each character should have clear traits and serve a specific purpose in the story. Add side characters too if needed.
         
+        Add only characters that fit naturally with the story without forcing all archetypes.
+        Each character should have clear values, motivations rooted in philosophies and relatable human traits.
+        
+        Make the characters feel authentic to culture while being universal in their appeal.
         Return a list of character objects with 'name', 'description', and 'role' fields in the 'characters' array.
         """
         

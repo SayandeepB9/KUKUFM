@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import concurrent.futures
 from typing import List, Dict, Any
+import re
 
 # Import local components
 from outline_generation_agent import OutlineGenerator
@@ -42,7 +43,7 @@ st.markdown("""
         margin-bottom: 0.5em;
     }
     .character-card {
-        background-color: #f0f2f6;
+        background-color: #8f2c61;
         border-radius: 10px;
         padding: 15px;
         margin-bottom: 10px;
@@ -87,13 +88,12 @@ def create_story_directory(topic):
     title_slug = "".join(c if c.isalnum() else "_" for c in topic[:30])
     story_dir = f"stories/{title_slug}_{timestamp}"
     
-    # Create directories
-    if not os.path.exists(story_dir):
-        os.makedirs(story_dir)
+    # Create main directory
+    os.makedirs(story_dir, exist_ok=True)
     
     # Create subdirectories for different outputs
-    os.makedirs(f"{story_dir}/episodes", exist_ok=True)
-    os.makedirs(f"{story_dir}/dialogue", exist_ok=True)
+    os.makedirs(os.path.join(story_dir, "episodes"), exist_ok=True)
+    os.makedirs(os.path.join(story_dir, "dialogue"), exist_ok=True)
     
     return story_dir
 
@@ -155,19 +155,35 @@ def save_story(story_data, story_dir):
         # Episodes with dialogues
         f.write("## Story\n\n")
         
-        for episode in story_data['episodes']:
+        # Ensure episodes are in correct order
+        sorted_episodes = sorted(story_data['episodes'], key=lambda ep: ep.number)
+        
+        for episode in sorted_episodes:
             episode_num = episode.number
             
-            # Get dialogue for this episode
-            dialogue = story_data.get('dialogue', {}).get(episode_num)
+            # Get episode content from enhanced episodes
+            enhanced_content = ""
+            enhanced_episode = story_data.get('enhanced_episodes', {}).get(episode_num, {})
+            if enhanced_episode:
+                if isinstance(enhanced_episode, dict) and 'lengthened_content' in enhanced_episode:
+                    enhanced_content = enhanced_episode['lengthened_content']
+                elif hasattr(enhanced_episode, 'lengthened_content'):
+                    enhanced_content = enhanced_episode.lengthened_content
             
+            # Get dialogue for this episode
+            dialogue = story_data.get('dialogue', {}).get(episode_num, "")
+            
+            f.write(f"### Episode {episode_num}: {episode.title}\n\n")
+            
+            # If dialogue exists, use it; otherwise use enhanced content
             if dialogue:
-                f.write(f"### Episode {episode_num}: {episode.title}\n\n")
                 f.write(f"{dialogue}\n\n")
-                
-                # Add a separator between episodes
-                if episode_num < len(story_data['episodes']):
-                    f.write("---\n\n")
+            else:
+                f.write(f"{enhanced_content}\n\n")
+            
+            # Add a separator between episodes
+            if episode_num < len(story_data['episodes']):
+                f.write("---\n\n")
         
         # Add metadata at the end
         f.write(f"\n\n*Generated on {datetime.now().strftime('%Y-%m-%d')}*\n")
@@ -176,6 +192,7 @@ def save_story(story_data, story_dir):
 
 # Initialize session state
 def init_session_state():
+    # Initialize all required session state variables with default values
     if 'story_data' not in st.session_state:
         st.session_state.story_data = {}
     if 'story_dir' not in st.session_state:
@@ -242,7 +259,15 @@ def generate_outline(topic: str):
 def handle_outline_feedback(topic: str, feedback: str):
     with st.spinner("Refining outline based on your feedback..."):
         outline_generator = OutlineGenerator()
-        refined_outline = outline_generator.refine_outline(topic, st.session_state.outline, feedback)
+        
+        # Clean the outline to remove any existing numbering before sending for refinement
+        cleaned_outline = []
+        for item in st.session_state.outline:
+            # Remove any leading numbering pattern (e.g., "1. ", "2. ", etc.)
+            cleaned_item = re.sub(r'^\d+\.\s*', '', item.strip())
+            cleaned_outline.append(cleaned_item)
+        
+        refined_outline = outline_generator.refine_outline(topic, cleaned_outline, feedback)
         st.session_state.outline = refined_outline
     
     st.success("Outline refined!")
@@ -298,13 +323,14 @@ def split_into_episodes(num_episodes: int):
 
 # Step 5: Enhance Episodes
 def enhance_episodes():
-    st.write("Enhancing episodes with detailed content...")
+    st.write("Enhancing episodes with detailed content in parallel...")
     
     # Create progress bar
     progress_bar = st.progress(0)
     
-    # Create a status area to show which episode is being processed
+    # Create a status area for overall progress
     status_text = st.empty()
+    status_text.text("Preparing episode contexts...")
     
     lengthener = EpisodeLengtheningAgent()
     enhanced_episodes = {}
@@ -357,104 +383,279 @@ def enhance_episodes():
         )
         
         # If story_dir exists, save to file
-        if st.session_state.story_dir:
+        if hasattr(st.session_state, 'story_dir') and st.session_state.story_dir:
             file_name = f"Episode_{episode.number}_{episode.title.replace(' ', '_')}.md"
             output_path = os.path.join(st.session_state.story_dir, "episodes", file_name)
             lengthener.save_episode_to_file(enhanced, output_path)
         
         return episode.number, enhanced
     
-    # Process episodes sequentially for visibility in UI
-    total_episodes = len(episode_contexts)
-    for i, context in enumerate(episode_contexts):
-        status_text.text(f"Enhancing Episode {context['episode_number']}: {context['episode_title']}")
-        episode_number, enhanced = enhance_episode(context)
-        enhanced_episodes[episode_number] = enhanced
+    # Create a placeholder for episode statuses
+    episode_statuses = st.empty()
+    episode_status_texts = {episode.number: "Pending" for episode in st.session_state.episodes}
+    
+    # Process episodes in parallel
+    status_text.text("Enhancing episodes in parallel...")
+    
+    # Determine number of workers - limit based on available processors and API rate limits
+    max_workers = min(os.cpu_count() or 4, len(episode_contexts), 3)  # Limiting to 3 concurrent API calls
+    
+    # Shared variable for completed episodes count
+    completed_episodes = 0
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all enhancement tasks
+        future_to_episode = {executor.submit(enhance_episode, context): context for context in episode_contexts}
         
-        # Update progress
-        progress_bar.progress((i + 1) / total_episodes)
+        # Display initial status
+        episode_status_md = "### Episode Enhancement Status\n"
+        for episode_num, status in episode_status_texts.items():
+            episode_title = next((ep.title for ep in st.session_state.episodes if ep.number == episode_num), "")
+            episode_status_md += f"- Episode {episode_num} ({episode_title}): {status}\n"
+        episode_statuses.markdown(episode_status_md)
+        
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_episode):
+            try:
+                # Get the context for this future
+                context = future_to_episode[future]
+                episode_num = context["episode_number"]
+                
+                # Get the result
+                episode_number, enhanced = future.result()
+                enhanced_episodes[episode_number] = enhanced
+                
+                # Update status
+                completed_episodes += 1
+                episode_status_texts[episode_num] = "✅ Completed"
+                
+                # Update status display
+                episode_status_md = "### Episode Enhancement Status\n"
+                for ep_num, status in episode_status_texts.items():
+                    ep_title = next((ep.title for ep in st.session_state.episodes if ep.number == ep_num), "")
+                    episode_status_md += f"- Episode {ep_num} ({ep_title}): {status}\n"
+                episode_statuses.markdown(episode_status_md)
+                
+                # Update progress bar
+                progress_bar.progress(completed_episodes / len(episode_contexts))
+                
+            except Exception as e:
+                # Get the context for this future
+                context = future_to_episode[future]
+                episode_num = context["episode_number"]
+                
+                # Update status with error
+                episode_status_texts[episode_num] = f"❌ Error: {str(e)}"
+                episode_status_md = "### Episode Enhancement Status\n"
+                for ep_num, status in episode_status_texts.items():
+                    ep_title = next((ep.title for ep in st.session_state.episodes if ep.number == ep_num), "")
+                    episode_status_md += f"- Episode {ep_num} ({ep_title}): {status}\n"
+                episode_statuses.markdown(episode_status_md)
     
     st.session_state.enhanced_episodes = enhanced_episodes
     st.session_state.current_step = 5
     progress_bar.empty()
     status_text.empty()
+    episode_statuses.empty()
     
-    st.success("Episodes enhanced!")
+    st.success(f"All {len(enhanced_episodes)} episodes enhanced successfully!")
     return st.session_state.enhanced_episodes
 
 # Step 6: Generate Dialogue
 def generate_dialogue(story_type: str):
-    st.write("Generating dialogue for episodes...")
+    st.write("Generating dialogue for episodes in parallel...")
     
     # Create progress bar
     progress_bar = st.progress(0)
     
-    # Create a status area to show which episode is being processed
+    # Create a status area for overall progress
     status_text = st.empty()
+    status_text.text("Preparing to generate dialogue...")
     
     dialogue_agent = DialogueAgent()
     dialogues = {}
     
-    # Process dialogues sequentially for visibility in UI
-    total_episodes = len(st.session_state.episodes)
-    for i, episode in enumerate(st.session_state.episodes):
-        status_text.text(f"Generating dialogue for Episode {episode.number}: {episode.title}")
-        
+    # Create episode data for parallel processing
+    episode_data = []
+    for episode in st.session_state.episodes:
         # Use enhanced content if available
+        enhanced_content = ""
         enhanced_episode = st.session_state.enhanced_episodes.get(episode.number)
-        if enhanced_episode and hasattr(enhanced_episode, 'lengthened_content'):
-            episode_content = enhanced_episode.lengthened_content
+        
+        if enhanced_episode:
+            if hasattr(enhanced_episode, 'lengthened_content'):
+                enhanced_content = enhanced_episode.lengthened_content
+            elif isinstance(enhanced_episode, dict) and 'lengthened_content' in enhanced_episode:
+                enhanced_content = enhanced_episode['lengthened_content']
+            else:
+                enhanced_content = episode.content
         else:
-            episode_content = episode.content
+            enhanced_content = episode.content
         
-        # Generate dialogue
-        dialogue = dialogue_agent.generate_dialogue(
-            story_type=story_type,
-            storyline=episode_content,
-            characters=st.session_state.characters
-        )
+        # Ensure we have content to work with
+        if not enhanced_content:
+            enhanced_content = episode.content
+            
+        # Debug info
+        st.session_state.debug_info = {
+            'episode_number': episode.number,
+            'content_type': type(enhanced_content),
+            'content_length': len(enhanced_content) if enhanced_content else 0
+        }
         
-        # Save dialogue to separate file if story_dir exists
-        if st.session_state.story_dir:
-            dialogue_file = os.path.join(
-                st.session_state.story_dir, 
-                "dialogue", 
-                f"dialogue_episode_{episode.number}.md"
+        episode_data.append({
+            "episode": episode,
+            "content": enhanced_content,
+            "characters": st.session_state.characters
+        })
+    
+    # Function to generate dialogue for a single episode
+    def generate_episode_dialogue(data):
+        episode = data["episode"]
+        episode_content = data["content"]
+        characters = data["characters"]  # Get characters from the data passed in
+        
+        try:
+            # Check if we have valid content to work with
+            if not episode_content or len(episode_content.strip()) < 10:
+                st.warning(f"Episode {episode.number} content is too short or empty. Using original episode content.")
+                episode_content = episode.content
+            
+            # Generate dialogue
+            dialogue = dialogue_agent.generate_dialogue(
+                story_type=story_type,
+                storyline=episode_content,
+                characters=characters  # Use the passed characters
             )
-            with open(dialogue_file, 'w', encoding='utf-8') as f:
-                f.write(f"# Dialogue for Episode {episode.number}: {episode.title}\n\n")
-                f.write(dialogue)
+            
+            # Validate dialogue output
+            if not dialogue or len(dialogue.strip()) < 10:
+                st.warning(f"Empty or too short dialogue generated for episode {episode.number}. This might indicate an API error.")
+                return episode.number, f"[Dialogue generation failed for Episode {episode.number}: {episode.title}]"
+            
+            # Save dialogue to separate file if story_dir exists
+            if hasattr(st.session_state, 'story_dir') and st.session_state.story_dir:
+                dialogue_file = os.path.join(
+                    st.session_state.story_dir, 
+                    "dialogue", 
+                    f"dialogue_episode_{episode.number}.md"
+                )
+                with open(dialogue_file, 'w', encoding='utf-8') as f:
+                    f.write(f"# Dialogue for Episode {episode.number}: {episode.title}\n\n")
+                    f.write(dialogue)
+            
+            return episode.number, dialogue
+        except Exception as e:
+            error_msg = f"Error generating dialogue for episode {episode.number}: {str(e)}"
+            st.error(error_msg)
+            # Also log to session state for debugging
+            if 'error_log' not in st.session_state:
+                st.session_state.error_log = []
+            st.session_state.error_log.append({
+                'episode': episode.number,
+                'error': str(e),
+                'content_length': len(episode_content) if episode_content else 0
+            })
+            return episode.number, f"[Error generating dialogue: {str(e)}]"
+    
+    # Create a placeholder for episode statuses
+    episode_statuses = st.empty()
+    episode_status_texts = {episode.number: "Pending" for episode in st.session_state.episodes}
+    
+    # Process dialogues in parallel
+    status_text.text("Generating dialogue in parallel...")
+    
+    # Determine number of workers - limit based on available processors and API rate limits
+    max_workers = min(os.cpu_count() or 4, len(episode_data), 3)  # Limiting to 3 concurrent API calls
+    
+    # Shared variable for completed episodes count
+    completed_episodes = 0
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all dialogue generation tasks
+        future_to_episode = {executor.submit(generate_episode_dialogue, data): data for data in episode_data}
         
-        dialogues[episode.number] = dialogue
+        # Display initial status
+        episode_status_md = "### Dialogue Generation Status\n"
+        for episode_num, status in episode_status_texts.items():
+            episode_title = next((ep.title for ep in st.session_state.episodes if ep.number == episode_num), "")
+            episode_status_md += f"- Episode {episode_num} ({episode_title}): {status}\n"
+        episode_statuses.markdown(episode_status_md)
         
-        # Update progress
-        progress_bar.progress((i + 1) / total_episodes)
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_episode):
+            try:
+                # Get the data for this future
+                data = future_to_episode[future]
+                episode = data["episode"]
+                
+                # Get the result
+                episode_number, dialogue = future.result()
+                dialogues[episode_number] = dialogue
+                
+                # Update status
+                completed_episodes += 1
+                episode_status_texts[episode.number] = "✅ Completed"
+                
+                # Update status display
+                episode_status_md = "### Dialogue Generation Status\n"
+                for ep_num, status in episode_status_texts.items():
+                    ep_title = next((ep.title for ep in st.session_state.episodes if ep.number == ep_num), "")
+                    episode_status_md += f"- Episode {ep_num} ({ep_title}): {status}\n"
+                episode_statuses.markdown(episode_status_md)
+                
+                # Update progress bar
+                progress_bar.progress(completed_episodes / len(episode_data))
+                
+            except Exception as e:
+                # Get the data for this future
+                data = future_to_episode[future]
+                episode = data["episode"]
+                
+                # Update status with error
+                episode_status_texts[episode.number] = f"❌ Error: {str(e)}"
+                episode_status_md = "### Dialogue Generation Status\n"
+                for ep_num, status in episode_status_texts.items():
+                    ep_title = next((ep.title for ep in st.session_state.episodes if ep.number == ep_num), "")
+                    episode_status_md += f"- Episode {ep_num} ({ep_title}): {status}\n"
+                episode_statuses.markdown(episode_status_md)
     
     st.session_state.dialogues = dialogues
     st.session_state.current_step = 6
     progress_bar.empty()
     status_text.empty()
+    episode_statuses.empty()
     
-    st.success("Dialogue generated!")
+    st.success(f"Dialogue generated for {len(dialogues)} episodes!")
     return st.session_state.dialogues
 
 # Step 7: Translate Story
 def translate_story(target_languages: List[str]):
-    st.write("Translating story...")
+    st.write("Translating story to multiple languages in parallel...")
     
     # Check if any languages are selected
     if not target_languages:
         st.warning("No languages selected for translation. Skipping.")
         return []
     
+    # Check if story directory exists
+    if not hasattr(st.session_state, 'story_dir') or not st.session_state.story_dir:
+        st.error("Story directory not initialized. Cannot translate.")
+        return []
+    
     # Create progress bar
     progress_bar = st.progress(0)
     
-    # Create a status area to show which translation is being processed
+    # Create a status area for overall progress
     status_text = st.empty()
+    status_text.text("Preparing to translate...")
     
     # Read the content of the final story from the story directory
     final_story_file = os.path.join(st.session_state.story_dir, "final_story.md")
+    if not os.path.exists(final_story_file):
+        st.error(f"Final story file not found at {final_story_file}")
+        return []
+        
     with open(final_story_file, 'r', encoding='utf-8') as f:
         story_content = f.read()
     
@@ -462,11 +663,8 @@ def translate_story(target_languages: List[str]):
     translator = TranslatorAgent()
     translated_files = []
     
-    # Process translations sequentially for UI feedback
-    total_languages = len(target_languages)
-    for i, language in enumerate(target_languages):
-        status_text.text(f"Translating to {language}...")
-        
+    # Function to translate to a single language
+    def translate_to_language(language):
         try:
             # Translate the story
             translated_content = translator.translate_story(story_content, language)
@@ -476,16 +674,71 @@ def translate_story(target_languages: List[str]):
             with open(translated_file, 'w', encoding='utf-8') as f:
                 f.write(translated_content)
             
-            translated_files.append((language, translated_file))
-            
+            return language, translated_file, None  # No error
         except Exception as e:
-            st.error(f"Error translating to {language}: {str(e)}")
+            return language, None, str(e)  # Return error
+    
+    # Create a placeholder for language statuses
+    language_statuses = st.empty()
+    language_status_texts = {lang: "Pending" for lang in target_languages}
+    
+    # Display initial status
+    language_status_md = "### Translation Status\n"
+    for lang, status in language_status_texts.items():
+        language_status_md += f"- {lang}: {status}\n"
+    language_statuses.markdown(language_status_md)
+    
+    # Determine number of workers - limit based on available processors and API rate limits
+    max_workers = min(os.cpu_count() or 4, len(target_languages), 3)  # Limiting to 3 concurrent API calls
+    
+    # Shared variable for completed translations count
+    completed_translations = 0
+    
+    # Process translations in parallel
+    status_text.text("Translating in parallel...")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all translation tasks
+        future_to_language = {executor.submit(translate_to_language, lang): lang for lang in target_languages}
         
-        # Update progress
-        progress_bar.progress((i + 1) / total_languages)
+        # Process results as they complete
+        for future in concurrent.futures.as_completed(future_to_language):
+            try:
+                language, file_path, error = future.result()
+                
+                # Update status
+                completed_translations += 1
+                
+                if error:
+                    language_status_texts[language] = f"❌ Error: {error}"
+                    st.error(f"Error translating to {language}: {error}")
+                else:
+                    language_status_texts[language] = "✅ Completed"
+                    translated_files.append((language, file_path))
+                
+                # Update status display
+                language_status_md = "### Translation Status\n"
+                for lang, status in language_status_texts.items():
+                    language_status_md += f"- {lang}: {status}\n"
+                language_statuses.markdown(language_status_md)
+                
+                # Update progress bar
+                progress_bar.progress(completed_translations / len(target_languages))
+                
+            except Exception as e:
+                # Get the language for this future
+                language = future_to_language[future]
+                
+                # Update status with error
+                language_status_texts[language] = f"❌ Error: {str(e)}"
+                language_status_md = "### Translation Status\n"
+                for lang, status in language_status_texts.items():
+                    language_status_md += f"- {lang}: {status}\n"
+                language_statuses.markdown(language_status_md)
     
     progress_bar.empty()
     status_text.empty()
+    language_statuses.empty()
     
     if translated_files:
         st.success(f"Story translated to {len(translated_files)} languages!")
@@ -495,47 +748,67 @@ def translate_story(target_languages: List[str]):
 
 # Function to finalize story
 def finalize_story(topic, story_type, target_languages):
-    # Create a unique directory for this story
-    story_dir = create_story_directory(topic)
-    st.session_state.story_dir = story_dir
-    
-    # Prepare serializable enhanced episodes
-    serializable_enhanced_episodes = {}
-    for num, ep in st.session_state.enhanced_episodes.items():
-        if hasattr(ep, 'lengthened_content'):
-            serializable_enhanced_episodes[num] = {
-                "lengthened_content": ep.lengthened_content,
-                "engagement_points": getattr(ep, 'engagement_points', []),
-                "summary": getattr(ep, 'summary', "")
-            }
-        else:
-            serializable_enhanced_episodes[num] = ep
-    
-    # Create story data structure
-    story_data = {
-        "topic": topic,
-        "story_type": story_type,
-        "outline": st.session_state.outline,
-        "detailed_plot": st.session_state.plot,
-        "literary_elements": st.session_state.literary_elements if hasattr(st.session_state, 'literary_elements') else {},
-        "characters": st.session_state.characters,
-        "episodes": st.session_state.episodes,
-        "enhanced_episodes": serializable_enhanced_episodes,
-        "dialogue": st.session_state.dialogues,
-        "generated_at": datetime.now().isoformat(),
-        "translations": [lang for lang in target_languages] if target_languages else []
-    }
-    
-    st.session_state.story_data = story_data
-    
-    # Save all story data to the story directory
-    save_story(story_data, story_dir)
-    
-    # Translate if languages are specified
-    if target_languages:
-        translate_story(target_languages)
-    
-    return story_data, story_dir
+    try:
+        # Create a unique directory for this story
+        story_dir = create_story_directory(topic)
+        
+        # Verify that the directories were created successfully
+        if not os.path.exists(story_dir):
+            st.error(f"Failed to create story directory: {story_dir}")
+            return None, None
+            
+        # Check that the required subdirectories exist
+        episodes_dir = os.path.join(story_dir, "episodes")
+        dialogue_dir = os.path.join(story_dir, "dialogue")
+        
+        if not os.path.exists(episodes_dir):
+            os.makedirs(episodes_dir, exist_ok=True)
+        if not os.path.exists(dialogue_dir):
+            os.makedirs(dialogue_dir, exist_ok=True)
+            
+        # Set the session state after directory verification
+        st.session_state.story_dir = story_dir
+        
+        # Prepare serializable enhanced episodes
+        serializable_enhanced_episodes = {}
+        for num, ep in st.session_state.enhanced_episodes.items():
+            if hasattr(ep, 'lengthened_content'):
+                serializable_enhanced_episodes[num] = {
+                    "lengthened_content": ep.lengthened_content,
+                    "engagement_points": getattr(ep, 'engagement_points', []),
+                    "summary": getattr(ep, 'summary', "")
+                }
+            else:
+                serializable_enhanced_episodes[num] = ep
+        
+        # Create story data structure
+        story_data = {
+            "topic": topic,
+            "story_type": story_type,
+            "outline": st.session_state.outline,
+            "detailed_plot": st.session_state.plot,
+            "literary_elements": st.session_state.literary_elements if hasattr(st.session_state, 'literary_elements') else {},
+            "characters": st.session_state.characters,
+            "episodes": st.session_state.episodes,
+            "enhanced_episodes": serializable_enhanced_episodes,
+            "dialogue": st.session_state.dialogues,
+            "generated_at": datetime.now().isoformat(),
+            "translations": [lang for lang in target_languages] if target_languages else []
+        }
+        
+        st.session_state.story_data = story_data
+        
+        # Save all story data to the story directory
+        save_story(story_data, story_dir)
+        
+        # Translate if languages are specified
+        if target_languages:
+            translate_story(target_languages)
+        
+        return story_data, story_dir
+    except Exception as e:
+        st.error(f"Error finalizing story: {str(e)}")
+        return None, None
 
 # Main app function
 def main():
@@ -574,14 +847,14 @@ def main():
                 
             with col2:
                 story_type = st.selectbox("Story Type", 
-                                        ["general", "mystery", "sci-fi", "fantasy", "romance", "thriller", "comedy"],
-                                        index=1,
+                                        ["novel", "drama", "mystery", "sci-fi", "fantasy", "romance", "thriller", "horror", "comedy", "adventure"],
+                                        index=0,
                                         help="Select the genre of your story")
             
             # Translation options
             languages = st.multiselect("Translate to languages (optional)", 
-                                    ["Hindi", "Spanish", "French", "German", "Chinese", "Japanese", "Russian"],
-                                    help="Select languages to translate your story into")
+                                    ["Hindi", "Tamil", "Telugu", "Malayalam", "Kannada", "Bengali", "Marathi", "Gujarati", "Punjabi", "Urdu", "Assamese", "Odia"],
+                                    help="Select Indian languages to translate your story into")
             
             # Submit button
             submit = st.form_submit_button("Generate Story")
@@ -721,8 +994,13 @@ def main():
     elif st.session_state.current_step == 5:
         st.markdown("<h2 class='sub-header'>Enhanced Episodes</h2>", unsafe_allow_html=True)
         
-        # Show enhanced episodes
-        for episode_num, enhanced in st.session_state.enhanced_episodes.items():
+        # Sort episode numbers to ensure they display in order
+        sorted_episode_nums = sorted(st.session_state.enhanced_episodes.keys())
+        
+        # Show enhanced episodes in correct order
+        for episode_num in sorted_episode_nums:
+            enhanced = st.session_state.enhanced_episodes[episode_num]
+            
             # Find the original episode
             original_episode = next(
                 (ep for ep in st.session_state.episodes if ep.number == episode_num), 
@@ -747,14 +1025,30 @@ def main():
     elif st.session_state.current_step == 6:
         st.markdown("<h2 class='sub-header'>Story with Dialogue</h2>", unsafe_allow_html=True)
         
+        # Debug info for troubleshooting
+        if hasattr(st.session_state, 'debug_info'):
+            with st.expander("Debug Information"):
+                st.json(st.session_state.debug_info)
+        
+        # Show error logs if any
+        if hasattr(st.session_state, 'error_log') and st.session_state.error_log:
+            with st.expander("Error Logs"):
+                st.error("Errors occurred during dialogue generation:")
+                for error in st.session_state.error_log:
+                    st.write(f"Episode {error['episode']}: {error['error']}")
+                    st.write(f"Content length: {error['content_length']}")
+                    st.divider()
+        
         # Show tabs for episodes with dialogue
         if st.session_state.episodes:
-            tab_titles = [f"Episode {ep.number}: {ep.title}" for ep in st.session_state.episodes]
+            # Sort episodes by episode number to ensure proper ordering
+            sorted_episodes = sorted(st.session_state.episodes, key=lambda ep: ep.number)
+            tab_titles = [f"Episode {ep.number}: {ep.title}" for ep in sorted_episodes]
             tabs = st.tabs(tab_titles)
             
             for i, tab in enumerate(tabs):
                 with tab:
-                    episode = st.session_state.episodes[i]
+                    episode = sorted_episodes[i]
                     episode_num = episode.number
                     
                     # Display episode content
@@ -774,6 +1068,8 @@ def main():
                     if dialogue:
                         st.markdown("<h3>Dialogue</h3>", unsafe_allow_html=True)
                         st.write(dialogue)
+                    else:
+                        st.warning(f"No dialogue generated for Episode {episode_num}. Dialogue generation may have failed.")
         
         # Finalize story button
         if st.button("Finalize Story"):

@@ -107,7 +107,7 @@ class PlotSelectorAgent:
         categories = list(self.story_elements.keys())[:5]
         
         # Randomly decide how many categories to include (at least 1, at most all)
-        num_categories = random.randint(2, len(categories))
+        num_categories = random.randint(3, len(categories))
         
         # Randomly select which categories to include
         selected_categories = random.sample(categories, num_categories)

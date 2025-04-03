@@ -25,25 +25,26 @@ class EpisodeLengtheningAgent:
         
         self.system_prompt = (
             "REMEMBER YOU HAVE TO MAKE IT OF 10k WORDS"
-            "You are a master storyteller specializing in rich, detailed narratives. "
-            "Your task is to significantly expand an episode outline into a complete story "
-            "of approximately 10k words. You must maintain perfect continuity with "
-            "previous episodes (as summarized) and ensure that any cliffhanger from the "
-            "previous episode is properly addressed and resolved in your expanded narrative. "
-            "You must also seamlessly set up elements that will be important in future episodes "
-            "to maintain narrative coherence across the entire story arc. "
-            "If this episode should end with a cliffhanger, make sure your expanded content "
-            "builds properly toward it."
+            "You are a master storyteller in the classical Indian tradition, skilled in the ancient art of 'vistar' (elaborate expansion). "
+            "Your task is to transform a brief episode outline into a richly detailed narrative of approximately 10,000 words, "
+            "infusing it with the depth and wisdom characteristic of Indian literary traditions like Ramayana, Mahabharata, and Panchatantra. "
             
-            "Utilize the provided character details to create rich character development "
-            "throughout the narrative. Incorporate their personalities, backstories, motivations, "
-            "and unique traits as described in their profiles. Make sure each character's actions "
-            "and reactions are consistent with their established personality and role in the story."
+            "In expanding this narrative:"
+            "- Maintain perfect continuity with previous episodes, addressing any cliffhangers with thoughtful resolution"
+            "- Incorporate rich sensory descriptions that immerse readers in the world of the story"
+            "- Weave in cultural elements, traditions, and occasionally Sanskrit/Hindi terms with contextual meaning"
+            "- Include philosophical reflections that subtly convey moral insights without being preachy"
+            "- Develop characters deeply, revealing their inner conflicts, growth, and motivations"
+            "- Create vivid scenes with detailed settings that feel authentically Indian yet universally appealing"
+            "- Use classical Indian storytelling techniques like nested narratives or metaphorical tales when appropriate"
+            "- Plant seeds for future episodes with subtle foreshadowing that maintains narrative coherence"
             
-            "Add depth through detailed scene descriptions, character development, "
-            "and rich world-building, all while maintaining the original plot points "
-            "and tone. Keep the narrative engaging throughout the extended length."
-            "Don't add any dialogues in the story and make it a narrative tone. "
+            "Your narrative should have the rhythmic flow of classical Indian storytelling—alternating between action, "
+            "reflection, description, and character development. While expanding significantly, maintain the soul and "
+            "direction of the original outline."
+            
+            "This is a narrative expansion only—do not include dialogues in this phase. Focus on creating a rich tapestry "
+            "of description, character insights, and plot development that will later be enhanced with dialogue."
         )
         
         # Using a regular prompt without structured output
@@ -82,14 +83,21 @@ class EpisodeLengtheningAgent:
         self.double_size_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", 
-                 "You are a master storyteller with the ability to expand narrative content effectively. "
-                 "Your task is to take an episode and double its size by adding more "
-                 "descriptive elements, character development, scene elaboration, and narrative depth. "
-                 "Maintain complete coherence with the original content while making the story richer and more engaging. "
-                 "The final content should seamlessly incorporate the original material."
-                 "Try to make the size of each sentence double or even more by splitting it and adding more elements."
-                 "You should add random things in the middle that do not play much role in the story but make the story more engaging and longer."
-                 ),
+                 "You are a master of vistar kala (the art of elaboration) in the classical Indian storytelling tradition. "
+                 "Your task is to double the length of a narrative by adding richer details, cultural elements, and depth "
+                 "while maintaining perfect continuity with the original content. "
+                 
+                 "As you expand the narrative:"
+                 "- Elaborate on settings with sensory details that evoke the atmosphere of the scene"
+                 "- Deepen character portrayals by revealing more about their thoughts, backgrounds, and motivations"
+                 "- Add culturally authentic elements that enrich the world of the story"
+                 "- Include philosophical reflections or inner monologues that add depth without disrupting flow"
+                 "- Expand descriptions of important objects, places, or moments with cultural and historical context"
+                 "- Add meaningful metaphors, similes, or brief allegorical elements in the style of classical Indian literature"
+                 
+                 "Your expansion should feel natural and seamless, as if these elements were always part of the story, "
+                 "simply waiting to be revealed in greater detail."
+                ),
                 ("human", 
                  "Please take this episode content and double its length by adding more details, descriptions, and depth.\n\n"
                  "Episode Number: {episode_number}\n"
@@ -231,25 +239,25 @@ class EpisodeLengtheningAgent:
             expansion_attempts = 0
             max_attempts = 3  # Limit the number of expansion attempts to prevent infinite loops
             
-            while word_count < 7000 and expansion_attempts < max_attempts:
-                print(f"Content too short ({word_count} words). Expanding episode {episode_number}...")
+            # while word_count < 7000 and expansion_attempts < max_attempts:
+            #     print(f"Content too short ({word_count} words). Expanding episode {episode_number}...")
                 
-                # Use the double_episode_size function to expand the content
-                lengthened_content = self.double_episode_size(
-                    episode_title=episode_title,
-                    episode_number=episode_number,
-                    current_content=lengthened_content,
-                    episode_outline=episode_outline,
-                    previous_episodes_summary=previous_episodes_summary,
-                    previous_cliffhanger=previous_cliffhanger,
-                    characters=characters
-                )
+            #     # Use the double_episode_size function to expand the content
+            #     lengthened_content = self.double_episode_size(
+            #         episode_title=episode_title,
+            #         episode_number=episode_number,
+            #         current_content=lengthened_content,
+            #         episode_outline=episode_outline,
+            #         previous_episodes_summary=previous_episodes_summary,
+            #         previous_cliffhanger=previous_cliffhanger,
+            #         characters=characters
+            #     )
                 
-                # Recalculate word count
-                word_count = len(lengthened_content.split())
-                expansion_attempts += 1
+            #     # Recalculate word count
+            #     word_count = len(lengthened_content.split())
+            #     expansion_attempts += 1
                 
-                print(f"After expansion attempt {expansion_attempts}: {word_count} words")
+            #     print(f"After expansion attempt {expansion_attempts}: {word_count} words")
             
             # Create the episode object manually
             episode = LengthenedEpisode(

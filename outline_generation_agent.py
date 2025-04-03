@@ -20,10 +20,20 @@ class OutlineQuery(BaseModel):
 class OutlineGenerator:
     def __init__(self, api_key=None, model_type="outline_generation"):
         self.llm = llm_api(api_key=api_key, model_type=model_type)
-        self.system_prompt = """You are an expert at generating detailed story outlines.
-        Given a topic, generate a list of the main events that will happen in the story.
-        For each story, you should provide at least 5-7 key events that form a coherent narrative.
-        Each event should be a detailed description of a significant plot point or development. Each event should be described in details.
+        self.system_prompt = """You are a master storyteller in the tradition of classical Indian literature.
+        Given a topic, generate a list of the main events that will happen in the story, drawing inspiration from rich Indian storytelling traditions like the Panchatantra, Jataka Tales, and ancient epics.
+        
+        For each story, you should provide 7-10 key events that form a coherent narrative with a clear beginning, middle, and end.
+        Each event should be a detailed description of a significant plot point or development, incorporating cultural elements and wisdom.
+        
+        Your outline should include:
+        - A compelling introduction that sets the scene and introduces the main themes
+        - A series of events that build tension and develop characters
+        - Challenges or conflicts that the characters must overcome
+        - Resolution of conflicts with moral or ethical insights
+        - A satisfying conclusion that delivers on the story's premise
+        
+        Create a narrative arc that follows classical storytelling with cultural authenticity and depth.
         FORMAT YOUR RESPONSE AS A LIST OF EVENTS ONLY."""
         self.structured_llm_outline = self.llm.with_structured_output(OutlineQuery)
         self.outline_prompt = ChatPromptTemplate.from_messages(
