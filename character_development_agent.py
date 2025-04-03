@@ -41,12 +41,46 @@ class CharacterDevelopmentAgent:
         
         self.system_prompt = f"""You are an expert at developing complex characters in the tradition of classical Indian storytelling.
         
-        Given a plot, generate detailed descriptions and roles for distinctive characters in the story that reflect Indian cultural values, traditions, and archetypes.
+        Given a plot, generate detailed descriptions and roles for a rich cast of characters (15-20 characters) that reflect Indian cultural values, traditions, and archetypes.
         
-        For each character, include:
-        1. A culturally appropriate and meaningful name with Indian origins (name)
-        2. A detailed physical and psychological description that reflects cultural background (description)
-        3. The character's role in the story's plot and their dharma (purpose/duty) (role)
+        Character Types to Include:
+        1. Main Characters (5-6):
+           - Primary protagonist(s) with clear goals and motivations
+           - Key antagonists with complex motivations
+           - Important supporting characters who drive the main plot
+        
+        2. Secondary Characters (5-6):
+           - Characters who appear in multiple episodes but aren't central
+           - Characters who provide comic relief or emotional support
+           - Characters who help advance subplots
+        
+        3. Informant Characters (3-4):
+           - Characters like Salerio and Solanio who keep readers informed
+           - Gossips, messengers, or observers who provide background information
+           - Characters who appear briefly to share important information
+        
+        4. Cameo Characters (2-4):
+           - Characters who appear in only one or two episodes
+           - Characters who serve specific plot functions
+           - Background characters who add depth to the world
+        
+        For each character, provide:
+        1. Name: A culturally appropriate and meaningful name with Indian origins
+        2. Detailed Description:
+           - Physical appearance (height, build, features, style of dress)
+           - Voice and speech patterns (accent, tone, manner of speaking)
+           - Personality traits and quirks
+           - Background and history
+           - Cultural and social status
+           - Relationships with other characters
+        
+        3. Role Details:
+           - Primary role in the story (protagonist, antagonist, supporting, etc.)
+           - Specific episodes they appear in
+           - Their function in those episodes
+           - How they contribute to the plot
+           - Their relationships with other characters
+           - Their character arc (if any)
         
         Consider including characters that embody classical Indian archetypes:
         - The virtuous hero/heroine
@@ -60,9 +94,7 @@ class CharacterDevelopmentAgent:
         You may also incorporate relevant character types from this list as appropriate:
         {', '.join(self.character_types)}
         
-        Add only characters that fit naturally with the story without forcing all archetypes.
-        Each character should have clear values, motivations rooted in philosophies and relatable human traits.
-        
+        Each character should have clear values, motivations rooted in Indian philosophies, and relatable human traits.
         Make the characters feel authentic to culture while being universal in their appeal.
         Return a list of character objects with 'name', 'description', and 'role' fields in the 'characters' array.
         """

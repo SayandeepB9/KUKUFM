@@ -6,6 +6,8 @@ from datetime import datetime
 import concurrent.futures
 from typing import List, Dict, Any
 import re
+import zipfile
+import shutil
 
 # Import local components
 from outline_generation_agent import OutlineGenerator
@@ -817,336 +819,510 @@ def main():
     
     # Display header
     st.markdown("<h1 class='main-header'>📚 KUKUFM Story Generator</h1>", unsafe_allow_html=True)
-    st.markdown(
-        """
-        Create engaging multi-episode stories with rich characters and dialogue using AI.
-        Complete each step of the process to generate your story.
-        """
-    )
     
-    # Display steps indicator
-    show_steps()
+    # Add navigation tabs
+    tab1, tab2 = st.tabs(["Story Generation", "Translation"])
     
-    # Story Configuration Section
-    if st.session_state.current_step == 0:
-        with st.form("story_config_form"):
-            st.markdown("<h2 class='sub-header'>Story Configuration</h2>", unsafe_allow_html=True)
+    with tab1:
+        st.markdown(
+            """
+            Create engaging multi-episode stories with rich characters and dialogue using AI.
+            Complete each step of the process to generate your story.
+            """
+        )
+        
+        # Display steps indicator
+        show_steps()
+        
+        # Story Configuration Section
+        if st.session_state.current_step == 0:
+            with st.form("story_config_form"):
+                st.markdown("<h2 class='sub-header'>Story Configuration</h2>", unsafe_allow_html=True)
+                
+                topic = st.text_input("Story Topic/Theme", 
+                                    value="A mysterious hotel with supernatural occurrences", 
+                                    help="Enter a brief description of your story idea")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    num_episodes = st.slider("Number of Episodes", 
+                                            min_value=2, 
+                                            max_value=10, 
+                                            value=5, 
+                                            help="Select the number of episodes for your story")
+                    
+                with col2:
+                    story_type = st.selectbox("Story Type", 
+                                            ["novel", "drama"],
+                                            index=0,
+                                            help="Select the genre of your story")
+                
+                # Translation options
+                languages = st.multiselect("Translate to languages (optional)", 
+                                        ["Hindi", "Tamil", "Telugu", "Malayalam", "Kannada", "Bengali", "Marathi", "Gujarati", "Punjabi", "Urdu", "Assamese", "Odia"],
+                                        help="Select Indian languages to translate your story into")
+                
+                # Submit button
+                submit = st.form_submit_button("Generate Story")
+                
+                if submit:
+                    if not topic:
+                        st.error("Please enter a story topic")
+                    else:
+                        # Start the story generation process
+                        st.session_state.topic = topic
+                        st.session_state.num_episodes = num_episodes
+                        st.session_state.story_type = story_type
+                        st.session_state.languages = languages
+                        
+                        # Generate outline
+                        outline = generate_outline(topic)
+                        st.rerun()
+        
+        # Step 1: Outline Feedback
+        elif st.session_state.current_step == 1:
+            st.markdown("<h2 class='sub-header'>Story Outline</h2>", unsafe_allow_html=True)
             
-            topic = st.text_input("Story Topic/Theme", 
-                                value="A mysterious hotel with supernatural occurrences", 
-                                help="Enter a brief description of your story idea")
+            # Display outline
+            for i, event in enumerate(st.session_state.outline, 1):
+                st.write(f"{i}. {event}")
             
+            # Feedback options
             col1, col2 = st.columns(2)
             
             with col1:
-                num_episodes = st.slider("Number of Episodes", 
-                                        min_value=2, 
-                                        max_value=10, 
-                                        value=5, 
-                                        help="Select the number of episodes for your story")
-                
+                if st.button("Accept Outline"):
+                    # Move to next step - Plot Development
+                    detailed_plot, literary_elements = develop_plot()
+                    st.rerun()
+            
             with col2:
-                story_type = st.selectbox("Story Type", 
-                                        ["novel", "drama", "mystery", "sci-fi", "fantasy", "romance", "thriller", "horror", "comedy", "adventure"],
-                                        index=0,
-                                        help="Select the genre of your story")
+                if st.button("Refine Outline"):
+                    st.session_state.show_outline_feedback = True
             
-            # Translation options
-            languages = st.multiselect("Translate to languages (optional)", 
-                                    ["Hindi", "Tamil", "Telugu", "Malayalam", "Kannada", "Bengali", "Marathi", "Gujarati", "Punjabi", "Urdu", "Assamese", "Odia"],
-                                    help="Select Indian languages to translate your story into")
-            
-            # Submit button
-            submit = st.form_submit_button("Generate Story")
-            
-            if submit:
-                if not topic:
-                    st.error("Please enter a story topic")
-                else:
-                    # Start the story generation process
-                    st.session_state.topic = topic
-                    st.session_state.num_episodes = num_episodes
-                    st.session_state.story_type = story_type
-                    st.session_state.languages = languages
+            if st.session_state.show_outline_feedback:
+                with st.form("outline_feedback_form"):
+                    st.write("Please provide feedback on how to improve the outline:")
+                    feedback = st.text_area("Feedback", height=100,
+                                          help="Suggest changes, additional elements, or different directions for the story")
                     
-                    # Generate outline
-                    outline = generate_outline(topic)
-                    st.rerun()
-    
-    # Step 1: Outline Feedback
-    elif st.session_state.current_step == 1:
-        st.markdown("<h2 class='sub-header'>Story Outline</h2>", unsafe_allow_html=True)
+                    submit_feedback = st.form_submit_button("Submit Feedback")
+                    
+                    if submit_feedback and feedback:
+                        handle_outline_feedback(st.session_state.topic, feedback)
+                        st.session_state.show_outline_feedback = False
+                        st.rerun()
         
-        # Display outline
-        for i, event in enumerate(st.session_state.outline, 1):
-            st.write(f"{i}. {event}")
-        
-        # Feedback options
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("Accept Outline"):
-                # Move to next step - Plot Development
-                detailed_plot, literary_elements = develop_plot()
+        # Step 2: Plot Development (no feedback needed, automatic progression)
+        elif st.session_state.current_step == 2:
+            st.markdown("<h2 class='sub-header'>Detailed Plot</h2>", unsafe_allow_html=True)
+            
+            # Show the detailed plot
+            st.write(st.session_state.plot)
+            
+            # Show literary elements
+            if hasattr(st.session_state, 'literary_elements') and st.session_state.literary_elements:
+                st.markdown("<h3>Literary Elements Used</h3>", unsafe_allow_html=True)
+                for category, element in st.session_state.literary_elements.items():
+                    st.write(f"**{category.capitalize()}:** {element}")
+            
+            # Progress button
+            if st.button("Continue to Character Creation"):
+                # Create characters and move to next step
+                characters = create_characters()
                 st.rerun()
         
-        with col2:
-            if st.button("Refine Outline"):
-                st.session_state.show_outline_feedback = True
-        
-        if st.session_state.show_outline_feedback:
-            with st.form("outline_feedback_form"):
-                st.write("Please provide feedback on how to improve the outline:")
-                feedback = st.text_area("Feedback", height=100,
-                                      help="Suggest changes, additional elements, or different directions for the story")
-                
-                submit_feedback = st.form_submit_button("Submit Feedback")
-                
-                if submit_feedback and feedback:
-                    handle_outline_feedback(st.session_state.topic, feedback)
-                    st.session_state.show_outline_feedback = False
-                    st.rerun()
-    
-    # Step 2: Plot Development (no feedback needed, automatic progression)
-    elif st.session_state.current_step == 2:
-        st.markdown("<h2 class='sub-header'>Detailed Plot</h2>", unsafe_allow_html=True)
-        
-        # Show the detailed plot
-        st.write(st.session_state.plot)
-        
-        # Show literary elements
-        if hasattr(st.session_state, 'literary_elements') and st.session_state.literary_elements:
-            st.markdown("<h3>Literary Elements Used</h3>", unsafe_allow_html=True)
-            for category, element in st.session_state.literary_elements.items():
-                st.write(f"**{category.capitalize()}:** {element}")
-        
-        # Progress button
-        if st.button("Continue to Character Creation"):
-            # Create characters and move to next step
-            characters = create_characters()
-            st.rerun()
-    
-    # Step 3: Character Development and Feedback
-    elif st.session_state.current_step == 3:
-        st.markdown("<h2 class='sub-header'>Characters</h2>", unsafe_allow_html=True)
-        
-        # Display characters in a grid
-        cols = st.columns(2)  # 2 columns for character display
-        
-        for i, character in enumerate(st.session_state.characters):
-            with cols[i % 2]:  # Alternate between columns
-                with st.container():
-                    st.markdown(
-                        f"""
-                        <div class="character-card">
-                            <h3>{character['name']}</h3>
-                            <p><strong>Role:</strong> {character['role']}</p>
-                            <p>{character['description']}</p>
-                        </div>
-                        """, 
-                        unsafe_allow_html=True
-                    )
-        
-        # Feedback options
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("Accept Characters"):
-                # Move to next step - Episode Splitting
-                episodes = split_into_episodes(st.session_state.num_episodes)
-                st.rerun()
-        
-        with col2:
-            if st.button("Refine Characters"):
-                st.session_state.show_character_feedback = True
-        
-        if st.session_state.show_character_feedback:
-            with st.form("character_feedback_form"):
-                st.write("Please provide feedback on how to improve the characters:")
-                feedback = st.text_area("Feedback", height=100,
-                                      help="Suggest changes to characters, new personalities, or different roles")
-                
-                submit_feedback = st.form_submit_button("Submit Feedback")
-                
-                if submit_feedback and feedback:
-                    handle_character_feedback(feedback)
-                    st.session_state.show_character_feedback = False
-                    st.rerun()
-    
-    # Step 4: Episode Splitting (automatic progression)
-    elif st.session_state.current_step == 4:
-        st.markdown("<h2 class='sub-header'>Episode Outlines</h2>", unsafe_allow_html=True)
-        
-        # Show episode outlines
-        for episode in st.session_state.episodes:
-            with st.expander(f"Episode {episode.number}: {episode.title}"):
-                st.write(episode.content)
-                if episode.cliffhanger:
-                    st.markdown(f"<p class='cliffhanger'>Cliffhanger: {episode.cliffhanger}</p>", unsafe_allow_html=True)
-        
-        # Progress button
-        if st.button("Enhance Episodes"):
-            # Enhance episodes and move to next step
-            enhanced_episodes = enhance_episodes()
-            st.rerun()
-    
-    # Step 5: Episode Enhancement (automatic progression)
-    elif st.session_state.current_step == 5:
-        st.markdown("<h2 class='sub-header'>Enhanced Episodes</h2>", unsafe_allow_html=True)
-        
-        # Sort episode numbers to ensure they display in order
-        sorted_episode_nums = sorted(st.session_state.enhanced_episodes.keys())
-        
-        # Show enhanced episodes in correct order
-        for episode_num in sorted_episode_nums:
-            enhanced = st.session_state.enhanced_episodes[episode_num]
+        # Step 3: Character Development and Feedback
+        elif st.session_state.current_step == 3:
+            st.markdown("<h2 class='sub-header'>Characters</h2>", unsafe_allow_html=True)
             
-            # Find the original episode
-            original_episode = next(
-                (ep for ep in st.session_state.episodes if ep.number == episode_num), 
-                None
-            )
+            # Display characters in a grid
+            cols = st.columns(2)  # 2 columns for character display
             
-            if original_episode and enhanced:
-                title = original_episode.title
-                with st.expander(f"Episode {episode_num}: {title}"):
-                    if hasattr(enhanced, 'lengthened_content'):
-                        st.write(enhanced.lengthened_content)
-                    else:
-                        st.write(enhanced.get('lengthened_content', 'Content not available'))
-        
-        # Progress button
-        if st.button("Generate Dialogue"):
-            # Generate dialogue and move to next step
-            dialogues = generate_dialogue(st.session_state.story_type)
-            st.rerun()
-    
-    # Step 6: Dialogue Generation and Final Story
-    elif st.session_state.current_step == 6:
-        st.markdown("<h2 class='sub-header'>Story with Dialogue</h2>", unsafe_allow_html=True)
-        
-        # Debug info for troubleshooting
-        if hasattr(st.session_state, 'debug_info'):
-            with st.expander("Debug Information"):
-                st.json(st.session_state.debug_info)
-        
-        # Show error logs if any
-        if hasattr(st.session_state, 'error_log') and st.session_state.error_log:
-            with st.expander("Error Logs"):
-                st.error("Errors occurred during dialogue generation:")
-                for error in st.session_state.error_log:
-                    st.write(f"Episode {error['episode']}: {error['error']}")
-                    st.write(f"Content length: {error['content_length']}")
-                    st.divider()
-        
-        # Show tabs for episodes with dialogue
-        if st.session_state.episodes:
-            # Sort episodes by episode number to ensure proper ordering
-            sorted_episodes = sorted(st.session_state.episodes, key=lambda ep: ep.number)
-            tab_titles = [f"Episode {ep.number}: {ep.title}" for ep in sorted_episodes]
-            tabs = st.tabs(tab_titles)
-            
-            for i, tab in enumerate(tabs):
-                with tab:
-                    episode = sorted_episodes[i]
-                    episode_num = episode.number
-                    
-                    # Display episode content
-                    enhanced = st.session_state.enhanced_episodes.get(episode_num)
-                    content = ""
-                    if enhanced:
-                        if hasattr(enhanced, 'lengthened_content'):
-                            content = enhanced.lengthened_content
-                        else:
-                            content = enhanced.get('lengthened_content', '')
-                    
-                    st.markdown("<h3>Episode Content</h3>", unsafe_allow_html=True)
-                    st.write(content)
-                    
-                    # Display dialogue
-                    dialogue = st.session_state.dialogues.get(episode_num, "")
-                    if dialogue:
-                        st.markdown("<h3>Dialogue</h3>", unsafe_allow_html=True)
-                        st.write(dialogue)
-                    else:
-                        st.warning(f"No dialogue generated for Episode {episode_num}. Dialogue generation may have failed.")
-        
-        # Finalize story button
-        if st.button("Finalize Story"):
-            with st.spinner("Finalizing story and saving files..."):
-                story_data, story_dir = finalize_story(
-                    st.session_state.topic,
-                    st.session_state.story_type,
-                    st.session_state.languages
-                )
-            
-            st.success("Story generation complete!")
-            st.session_state.current_step = 7
-            st.rerun()
-    
-    # Step 7: Downloads
-    elif st.session_state.current_step == 7:
-        st.markdown("<h2 class='sub-header'>Final Story</h2>", unsafe_allow_html=True)
-        
-        st.success(f"Your story '{st.session_state.topic}' has been successfully generated!")
-        
-        # Show download options
-        st.markdown("<h3>Download Options</h3>", unsafe_allow_html=True)
-        
-        if st.session_state.story_dir:
-            # Complete story
-            final_story_path = os.path.join(st.session_state.story_dir, "final_story.md")
-            story_details_path = os.path.join(st.session_state.story_dir, "story_details.md")
-            
-            if os.path.exists(final_story_path):
-                with open(final_story_path, 'r', encoding='utf-8') as f:
-                    final_story_content = f.read()
-                
-                st.download_button(
-                    label="Download Complete Story (MD)",
-                    data=final_story_content,
-                    file_name="final_story.md",
-                    mime="text/markdown",
-                    key="download_final_story"
-                )
-            
-            if os.path.exists(story_details_path):
-                with open(story_details_path, 'r', encoding='utf-8') as f:
-                    story_details_content = f.read()
-                
-                st.download_button(
-                    label="Download Story Details (MD)",
-                    data=story_details_content,
-                    file_name="story_details.md",
-                    mime="text/markdown",
-                    key="download_story_details"
-                )
-            
-            # Show translation downloads if available
-            if st.session_state.translated_files:
-                st.markdown("<h3>Translated Versions</h3>", unsafe_allow_html=True)
-                
-                for language, file_path in st.session_state.translated_files:
-                    if os.path.exists(file_path):
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            translated_content = f.read()
-                        
-                        file_name = os.path.basename(file_path)
-                        st.download_button(
-                            label=f"Download {language} Translation",
-                            data=translated_content,
-                            file_name=file_name,
-                            mime="text/markdown",
-                            key=f"download_{language}"
+            for i, character in enumerate(st.session_state.characters):
+                with cols[i % 2]:  # Alternate between columns
+                    with st.container():
+                        st.markdown(
+                            f"""
+                            <div class="character-card">
+                                <h3>{character['name']}</h3>
+                                <p><strong>Role:</strong> {character['role']}</p>
+                                <p>{character['description']}</p>
+                            </div>
+                            """, 
+                            unsafe_allow_html=True
                         )
+            
+            # Feedback options
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("Accept Characters"):
+                    # Move to next step - Episode Splitting
+                    episodes = split_into_episodes(st.session_state.num_episodes)
+                    st.rerun()
+            
+            with col2:
+                if st.button("Refine Characters"):
+                    st.session_state.show_character_feedback = True
+            
+            if st.session_state.show_character_feedback:
+                with st.form("character_feedback_form"):
+                    st.write("Please provide feedback on how to improve the characters:")
+                    feedback = st.text_area("Feedback", height=100,
+                                          help="Suggest changes to characters, new personalities, or different roles")
+                    
+                    submit_feedback = st.form_submit_button("Submit Feedback")
+                    
+                    if submit_feedback and feedback:
+                        handle_character_feedback(feedback)
+                        st.session_state.show_character_feedback = False
+                        st.rerun()
         
-        # Generate new story button
-        if st.button("Generate New Story"):
-            # Reset session state
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            init_session_state()
-            st.rerun()
+        # Step 4: Episode Splitting (automatic progression)
+        elif st.session_state.current_step == 4:
+            st.markdown("<h2 class='sub-header'>Episode Outlines</h2>", unsafe_allow_html=True)
+            
+            # Show episode outlines
+            for episode in st.session_state.episodes:
+                with st.expander(f"Episode {episode.number}: {episode.title}"):
+                    st.write(episode.content)
+                    if episode.cliffhanger:
+                        st.markdown(f"<p class='cliffhanger'>Cliffhanger: {episode.cliffhanger}</p>", unsafe_allow_html=True)
+            
+            # Progress button
+            if st.button("Enhance Episodes"):
+                # Enhance episodes and move to next step
+                enhanced_episodes = enhance_episodes()
+                st.rerun()
+        
+        # Step 5: Episode Enhancement (automatic progression)
+        elif st.session_state.current_step == 5:
+            st.markdown("<h2 class='sub-header'>Enhanced Episodes</h2>", unsafe_allow_html=True)
+            
+            # Sort episode numbers to ensure they display in order
+            sorted_episode_nums = sorted(st.session_state.enhanced_episodes.keys())
+            
+            # Show enhanced episodes in correct order
+            for episode_num in sorted_episode_nums:
+                enhanced = st.session_state.enhanced_episodes[episode_num]
+                
+                # Find the original episode
+                original_episode = next(
+                    (ep for ep in st.session_state.episodes if ep.number == episode_num), 
+                    None
+                )
+                
+                if original_episode and enhanced:
+                    title = original_episode.title
+                    with st.expander(f"Episode {episode_num}: {title}"):
+                        if hasattr(enhanced, 'lengthened_content'):
+                            st.write(enhanced.lengthened_content)
+                        else:
+                            st.write(enhanced.get('lengthened_content', 'Content not available'))
+            
+            # Progress button
+            if st.button("Generate Dialogue"):
+                # Generate dialogue and move to next step
+                dialogues = generate_dialogue(st.session_state.story_type)
+                st.rerun()
+        
+        # Step 6: Dialogue Generation and Final Story
+        elif st.session_state.current_step == 6:
+            st.markdown("<h2 class='sub-header'>Story with Dialogue</h2>", unsafe_allow_html=True)
+            
+            # Debug info for troubleshooting
+            if hasattr(st.session_state, 'debug_info'):
+                with st.expander("Debug Information"):
+                    st.json(st.session_state.debug_info)
+            
+            # Show error logs if any
+            if hasattr(st.session_state, 'error_log') and st.session_state.error_log:
+                with st.expander("Error Logs"):
+                    st.error("Errors occurred during dialogue generation:")
+                    for error in st.session_state.error_log:
+                        st.write(f"Episode {error['episode']}: {error['error']}")
+                        st.write(f"Content length: {error['content_length']}")
+                        st.divider()
+            
+            # Show tabs for episodes with dialogue
+            if st.session_state.episodes:
+                # Sort episodes by episode number to ensure proper ordering
+                sorted_episodes = sorted(st.session_state.episodes, key=lambda ep: ep.number)
+                tab_titles = [f"Episode {ep.number}: {ep.title}" for ep in sorted_episodes]
+                tabs = st.tabs(tab_titles)
+                
+                for i, tab in enumerate(tabs):
+                    with tab:
+                        episode = sorted_episodes[i]
+                        episode_num = episode.number
+                        
+                        # Display episode content
+                        enhanced = st.session_state.enhanced_episodes.get(episode_num)
+                        content = ""
+                        if enhanced:
+                            if hasattr(enhanced, 'lengthened_content'):
+                                content = enhanced.lengthened_content
+                            else:
+                                content = enhanced.get('lengthened_content', '')
+                        
+                        st.markdown("<h3>Episode Content</h3>", unsafe_allow_html=True)
+                        st.write(content)
+                        
+                        # Display dialogue
+                        dialogue = st.session_state.dialogues.get(episode_num, "")
+                        if dialogue:
+                            st.markdown("<h3>Dialogue</h3>", unsafe_allow_html=True)
+                            st.write(dialogue)
+                        else:
+                            st.warning(f"No dialogue generated for Episode {episode_num}. Dialogue generation may have failed.")
+            
+            # Finalize story button
+            if st.button("Finalize Story"):
+                with st.spinner("Finalizing story and saving files..."):
+                    story_data, story_dir = finalize_story(
+                        st.session_state.topic,
+                        st.session_state.story_type,
+                        st.session_state.languages
+                    )
+                
+                st.success("Story generation complete!")
+                st.session_state.current_step = 7
+                st.rerun()
+        
+        # Step 7: Downloads
+        elif st.session_state.current_step == 7:
+            st.markdown("<h2 class='sub-header'>Final Story</h2>", unsafe_allow_html=True)
+            
+            st.success(f"Your story '{st.session_state.topic}' has been successfully generated!")
+            
+            # Show download options
+            st.markdown("<h3>Download Options</h3>", unsafe_allow_html=True)
+            
+            if st.session_state.story_dir:
+                # Create a ZIP file containing all story files
+                zip_path = os.path.join(st.session_state.story_dir, "story_files.zip")
+                
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    # Add all files from the story directory
+                    for root, dirs, files in os.walk(st.session_state.story_dir):
+                        for file in files:
+                            if file != "story_files.zip":  # Don't include the zip file itself
+                                file_path = os.path.join(root, file)
+                                arcname = os.path.relpath(file_path, st.session_state.story_dir)
+                                zipf.write(file_path, arcname)
+                
+                # Complete story
+                final_story_path = os.path.join(st.session_state.story_dir, "final_story.md")
+                story_details_path = os.path.join(st.session_state.story_dir, "story_details.md")
+                
+                if os.path.exists(final_story_path):
+                    with open(final_story_path, 'r', encoding='utf-8') as f:
+                        final_story_content = f.read()
+                    
+                    st.download_button(
+                        label="Download Complete Story (MD)",
+                        data=final_story_content,
+                        file_name="final_story.md",
+                        mime="text/markdown",
+                        key="download_final_story"
+                    )
+                
+                if os.path.exists(story_details_path):
+                    with open(story_details_path, 'r', encoding='utf-8') as f:
+                        story_details_content = f.read()
+                    
+                    st.download_button(
+                        label="Download Story Details (MD)",
+                        data=story_details_content,
+                        file_name="story_details.md",
+                        mime="text/markdown",
+                        key="download_story_details"
+                    )
+                
+                # Download ZIP file
+                if os.path.exists(zip_path):
+                    with open(zip_path, 'rb') as f:
+                        zip_content = f.read()
+                    
+                    st.download_button(
+                        label="Download All Story Files (ZIP)",
+                        data=zip_content,
+                        file_name="story_files.zip",
+                        mime="application/zip",
+                        key="download_story_zip"
+                    )
+                
+                # Show translated versions if available
+                if hasattr(st.session_state, 'translated_files') and st.session_state.translated_files:
+                    st.markdown("<h3>Translated Versions</h3>", unsafe_allow_html=True)
+                    
+                    for lang, file_path in st.session_state.translated_files:
+                        if os.path.exists(file_path):
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                translated_content = f.read()
+                            
+                            st.download_button(
+                                label=f"Download {lang} Version (MD)",
+                                data=translated_content,
+                                file_name=f"final_story_{lang.lower()}.md",
+                                mime="text/markdown",
+                                key=f"download_{lang.lower()}"
+                            )
+                
+                # Show story preview
+                st.markdown("<h3>Story Preview</h3>", unsafe_allow_html=True)
+                
+                if os.path.exists(final_story_path):
+                    with open(final_story_path, 'r', encoding='utf-8') as f:
+                        preview_content = f.read()
+                    
+                    # Show first 1000 characters as preview
+                    preview = preview_content[:1000] + "..." if len(preview_content) > 1000 else preview_content
+                    st.text_area("Preview", preview, height=200)
+            
+            # Generate new story button
+            if st.button("Generate New Story"):
+                # Reset session state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                init_session_state()
+                st.rerun()
+    
+    with tab2:
+        st.markdown("<h2 class='sub-header'>Story Translation</h2>", unsafe_allow_html=True)
+        
+        if not hasattr(st.session_state, 'story_dir') or not st.session_state.story_dir:
+            st.warning("Please generate a story first before attempting translation.")
+        else:
+            # Read the final story content
+            final_story_path = os.path.join(st.session_state.story_dir, "final_story.md")
+            if not os.path.exists(final_story_path):
+                st.error("Final story file not found. Please generate a story first.")
+            else:
+                with open(final_story_path, 'r', encoding='utf-8') as f:
+                    story_content = f.read()
+                
+                # Translation options
+                st.markdown("<h3>Select Languages for Translation</h3>", unsafe_allow_html=True)
+                
+                # Create columns for language selection
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    languages = [
+                        "Hindi", "Tamil", "Telugu", "Malayalam", "Kannada",
+                        "Bengali", "Marathi", "Gujarati", "Punjabi", "Urdu"
+                    ]
+                    selected_langs = st.multiselect(
+                        "Select Indian languages to translate your story into",
+                        languages,
+                        help="Choose one or more languages for translation"
+                    )
+                
+                with col2:
+                    st.markdown("""
+                    <div style='padding: 10px; background-color: #f0f2f6; border-radius: 5px;'>
+                        <h4>Translation Notes:</h4>
+                        <ul>
+                            <li>Translations will maintain the cultural context</li>
+                            <li>Each translation will be saved as a separate file</li>
+                            <li>You can download translations individually</li>
+                        </ul>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                if selected_langs:
+                    if st.button("Start Translation"):
+                        with st.spinner("Translating story to selected languages..."):
+                            # Create progress bar
+                            progress_bar = st.progress(0)
+                            
+                            # Create a status area for overall progress
+                            status_text = st.empty()
+                            status_text.text("Preparing to translate...")
+                            
+                            # Initialize translator agent
+                            translator = TranslatorAgent()
+                            translated_files = []
+                            
+                            # Create a placeholder for language statuses
+                            language_statuses = st.empty()
+                            language_status_texts = {lang: "Pending" for lang in selected_langs}
+                            
+                            # Display initial status
+                            language_status_md = "### Translation Status\n"
+                            for lang, status in language_status_texts.items():
+                                language_status_md += f"- {lang}: {status}\n"
+                            language_statuses.markdown(language_status_md)
+                            
+                            # Process translations in parallel
+                            status_text.text("Translating in parallel...")
+                            
+                            # Determine number of workers
+                            max_workers = min(os.cpu_count() or 4, len(selected_langs), 3)
+                            
+                            # Shared variable for completed translations count
+                            completed_translations = 0
+                            
+                            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                                # Submit all translation tasks
+                                future_to_language = {
+                                    executor.submit(translator.translate_story, story_content, lang): lang 
+                                    for lang in selected_langs
+                                }
+                                
+                                # Process results as they complete
+                                for future in concurrent.futures.as_completed(future_to_language):
+                                    try:
+                                        language = future_to_language[future]
+                                        translated_content = future.result()
+                                        
+                                        # Save the translated content
+                                        translated_file = os.path.join(
+                                            st.session_state.story_dir, 
+                                            f"final_story_{language.lower()}.md"
+                                        )
+                                        
+                                        with open(translated_file, 'w', encoding='utf-8') as f:
+                                            f.write(translated_content)
+                                        
+                                        translated_files.append((language, translated_file))
+                                        
+                                        # Update status
+                                        completed_translations += 1
+                                        language_status_texts[language] = "✅ Completed"
+                                        
+                                        # Update status display
+                                        language_status_md = "### Translation Status\n"
+                                        for lang, status in language_status_texts.items():
+                                            language_status_md += f"- {lang}: {status}\n"
+                                        language_statuses.markdown(language_status_md)
+                                        
+                                        # Update progress bar
+                                        progress_bar.progress(completed_translations / len(selected_langs))
+                                        
+                                    except Exception as e:
+                                        language = future_to_language[future]
+                                        language_status_texts[language] = f"❌ Error: {str(e)}"
+                                        st.error(f"Error translating to {language}: {str(e)}")
+                                        
+                                        # Update status display
+                                        language_status_md = "### Translation Status\n"
+                                        for lang, status in language_status_texts.items():
+                                            language_status_md += f"- {lang}: {status}\n"
+                                        language_statuses.markdown(language_status_md)
+                            
+                            progress_bar.empty()
+                            status_text.empty()
+                            language_statuses.empty()
+                            
+                            if translated_files:
+                                st.success(f"Story translated to {len(translated_files)} languages!")
+                                st.session_state.translated_files = translated_files
+                            else:
+                                st.error("No translations were completed successfully.")
 
 if __name__ == "__main__":
     main()

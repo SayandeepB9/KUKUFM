@@ -73,6 +73,7 @@ class PlotSelectorAgent:
             "STORY OUTLINE:\n{outline_str}\n\n"
             "SELECTED LITERARY ELEMENTS TO INCORPORATE:\n"
             "{literary_elements_str}\n\n"
+            "You can add subplots in proper places to make the story more intriguing. There can be one to two subplots in the entire plot"
             "Please develop a detailed plot that connects all the outline events while incorporating "
             "these randomly selected literary elements. Show how the story progresses logically from one event to the next, "
             "while building tension and character development throughout."
