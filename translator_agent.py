@@ -60,6 +60,7 @@ class TranslatorAgent:
             str: Translated story
         """
         print(f"---TRANSLATING STORY TO {target_language.upper()}---")
+        story_text = story_text[:5000]
         
         result = self.translator.invoke({
             "target_language": target_language,

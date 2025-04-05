@@ -126,13 +126,16 @@ def save_final_story(story_data, story_dir):
         for char in story_data['characters']:
             f.write(f"**{char['name']}** ({char['role']}): {char['description']}\n\n")
         
-        # Episodes with dialogues
+        # Episodes with dialogues as the final story
         f.write("## Story\n\n")
         
-        for episode in story_data['episodes']:
+        # Ensure episodes are in correct order
+        sorted_episodes = sorted(story_data['episodes'], key=lambda ep: ep.number)
+        
+        for episode in sorted_episodes:
             episode_num = episode.number
             
-            # Get dialogue for this episode
+            # Get dialogue for this episode - this is the FINAL STORY content
             dialogue = story_data.get('dialogue', {}).get(episode_num)
             
             if dialogue:
@@ -140,8 +143,10 @@ def save_final_story(story_data, story_dir):
                 f.write(f"{dialogue}\n\n")
                 
                 # Add a separator between episodes
-                if episode_num < len(story_data['episodes']):
+                if episode_num < len(sorted_episodes):
                     f.write("---\n\n")
+            else:
+                print(f"Warning: No dialogue/final story content for episode {episode_num}")
         
         # Add metadata at the end
         f.write(f"\n\n*Generated on {datetime.now().strftime('%Y-%m-%d')}*\n")

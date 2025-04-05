@@ -44,11 +44,27 @@ class StorySplitterAgent:
         self.llm = llm_api(api_key=api_key, model_type=self.model_type)
         
         self.system_prompt = (
-            "You are a master storyteller. Your task is to split a long narrative into interconnected episodes. "
+            "You are a master storyteller. Your task is to split a long narrative into interconnected episodes with extensive, "
+            "detailed content and engaging subplots for each episode. This is not just about splitting the main plot - "
+            "you must EXPAND the story substantially with new subplots and detailed character arcs."
+            
             "Given an overall outline, specific plot points, and detailed character descriptions, generate a long, engaging story divided into episodes. "
-            "For each episode, create a descriptive title, a detailed content section that moves the story forward, "
-            "and a dramatic cliffhanger that leaves the reader eager to continue, except for the final episode. "
-            "The final episode should have an empty cliffhanger field."
+            "For each episode, create:"
+            "1. A descriptive title that captures the essence of the episode"
+            "2. Detailed content (minimum 600 words per episode) that moves the story forward"
+            "3. A dramatic cliffhanger that leaves readers eager to continue, except for the final episode"
+            "4. New subplots that enrich the main storyline"
+            "5. Detailed character roles for each episode"
+            
+            "Make sure to:"
+            "- Create long, richly detailed episodes, not just brief summaries"
+            "- Develop secondary storylines and subplots for each episode"
+            "- Showcase multiple characters in each episode with specific roles"
+            "- Include unexpected twists and complications"
+            "- Create meaningful character plots and development"
+            "- Maintain narrative tension throughout the entire story arc"
+            
+            "The final episode should provide a satisfying conclusion and have an empty cliffhanger field."
         )
         
     def split_story(self, detailed_plot: str, characters: List[dict], num_episodes: int = 5):
@@ -66,59 +82,38 @@ class StorySplitterAgent:
                 {"name": "Character 3", "description": "An antagonist", "role": "Villain"}
             ]
         
-        # Adapt the prompt based on whether we're using GPT or Groq
-        if 'gpt' in self.model_name.lower():
-            # GPT tends to work better with clear structure and examples
-            direct_prompt = f"""
-            Create exactly {num_episodes} sequential episodes for a story with the following details:
-            
-            DETAILED PLOT: {detailed_plot}
-            
-            CHARACTERS: {json.dumps([{"name": c["name"], "role": c["role"]} for c in characters])}
-            
-            For each episode, follow this specific format:
-            
-            EPISODE NUMBER: [number]
-            TITLE: [title]
-            CONTENT: [detailed content - at least 200 words]
-            CLIFFHANGER: [cliffhanger - should be empty for the final episode]
-            
-            Example formatting (do not use this content, just follow the format):
-            
-            EPISODE NUMBER: 1
-            TITLE: The Beginning
-            CONTENT: This is where the detailed narrative goes...
-            CLIFFHANGER: This is where you include a dramatic ending to keep readers engaged.
-            
-            EPISODE NUMBER: 2
-            TITLE: The Middle
-            ...and so on.
-            
-            Make sure to create exactly {num_episodes} episodes that tell a complete story.
-            """
-        else:
-            # Groq models sometimes need simpler instructions
-            direct_prompt = f"""
-            Split the following story into {num_episodes} episodes:
-            
-            Story plot: {detailed_plot}
-            
-            Main characters: {", ".join([c["name"] + " (" + c["role"] + ")" for c in characters])}
-            
-            For each episode, please provide:
-            1. Episode number (1 through {num_episodes})
-            2. A title
-            3. Detailed content (the story narrative)
-            4. A cliffhanger (except for the final episode)
-            
-            Use this exact format:
-            EPISODE NUMBER: (number)
-            TITLE: (title)
-            CONTENT: (content)
-            CLIFFHANGER: (cliffhanger)
-            
-            For the final episode (Episode {num_episodes}), leave the CLIFFHANGER field empty.
-            """
+        # Create a more detailed prompt that encourages subplots and expanded content
+        direct_prompt = f"""
+        Create exactly {num_episodes} sequential episodes for a story with the following details:
+        
+        DETAILED PLOT: {detailed_plot}
+        
+        CHARACTERS: {json.dumps(characters, indent=2)}
+        
+        Your task is to split this story into {num_episodes} detailed episodes, but you must EXPAND on the plot with:
+        1. Additional subplots for each episode
+        2. Detailed character interactions and development 
+        3. Expanded storylines that enrich the main narrative
+        4. New conflicts and challenges specific to each episode
+        
+        For each episode, follow this specific format:
+        
+        EPISODE NUMBER: [number]
+        TITLE: [title - make it compelling and thematic]
+        CONTENT: [detailed content - minimum 600 words per episode with rich descriptions, character development, and subplots]
+        CLIFFHANGER: [dramatic cliffhanger - should be empty for the final episode]
+        
+        IMPORTANT GUIDELINES:
+        - Each episode should be a substantial narrative, not just a brief summary
+        - Show how EACH character contributes to the story in specific ways
+        - Create additional subplots that connect to the main storyline
+        - Include detailed character interactions and dialogue moments
+        - Ensure the episodes flow logically while building dramatic tension
+        - Make episodes much longer and more detailed than a simple outline
+        - Create meaningful roles for secondary characters in each episode
+        
+        Make sure to create exactly {num_episodes} episodes that tell a complete, richly detailed story.
+        """
         
         # Get the response
         print(f"Generating episodes using {self.model_name}...")

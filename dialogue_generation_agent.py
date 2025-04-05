@@ -23,8 +23,10 @@ class DialogueAgent:
             "You are a master storyteller in the rich tradition of literature, skilled in creating immersive narratives "
             "that blend description, dialogue, and character development into a cohesive whole. "
             
-            "Your task is to transform the enhanced episode content into a final, polished story that seamlessly integrates "
+            "Your task is to transform the enhanced episode content into a FINAL, POLISHED STORY that seamlessly integrates "
             "all narrative elements while maintaining the cultural authenticity and depth of Indian storytelling. "
+            "This is NOT just dialogue generation - this is the creation of the COMPLETE FINAL STORY that will "
+            "be presented to readers. You MUST incorporate ALL enhanced content - nothing should be left out."
             
             "For 'novel' style stories:"
             "- Create a rich narrative voice that guides readers through the story"
@@ -37,12 +39,13 @@ class DialogueAgent:
             "- Transform narrative content into dynamic scenes with dialogue"
             "- Use soliloquies and asides to reveal character thoughts and motivations"
             "- Include informant characters (like Salerio and Solanio) to provide background information"
-            "- Add stage directions and scene descriptions where needed"
+            "- Add stage directions and scene descriptions in square brackets [like this]"
+            "- Use detailed and elaborate scene descriptions in Barnard Shaw's style"
             "- Use monologues for important revelations and character development"
             "- Incorporate culturally authentic speech patterns and verbal interactions"
             
             "For both styles, ensure:"
-            "- All enhanced content is naturally integrated into the final story"
+            "- ALL enhanced content is naturally integrated into the final story - NOTHING should be omitted"
             "- No plot points or character developments are lost in the transformation"
             "- Cultural elements are woven naturally into the narrative"
             "- Character voices remain consistent with their descriptions"
@@ -71,13 +74,15 @@ class DialogueAgent:
             [
                 ("system", self.system_prompt),
                 ("human", 
-                 "Generate a dialogue script for the following episode.\n\n"
+                 "Create the COMPLETE FINAL STORY for the following episode.\n\n"
                  "Story Type: {story_type}\n"
-                 "Episode Storyline: {storyline}\n"
+                 "Episode Content (integrate ALL of this into the final story): {storyline}\n"
                  "Characters: {characters}\n\n"
-                 "Please produce an engaging and coherent dialogue script as per the given style. "
+                 "Remember this is NOT just dialogue generation - this is the creation of the FINAL STORY that will be "
+                 "presented to readers. Produce a complete, engaging and seamless narrative as per the given style. "
                  "If the style is 'novel', the narrator's voice should be prominent alongside character dialogues. "
-                 "If the style is 'drama', focus on the conversation between characters with narration."
+                 "If the style is 'drama', focus on the conversation between characters with detailed stage directions "
+                 "in square brackets [like this]. INCORPORATE ALL CONTENT - nothing should be left out."
                 )
             ]
         )
@@ -103,11 +108,15 @@ class DialogueAgent:
             fallback_prompt = ChatPromptTemplate.from_messages([
                 ("system", self.system_prompt),
                 ("human", 
-                 "Generate a dialogue script for the following episode.\n\n"
+                 "Create the COMPLETE FINAL STORY for the following episode.\n\n"
                  f"Story Type: {story_type}\n"
-                 f"Episode Storyline: {storyline}\n"
+                 f"Episode Content (integrate ALL of this into the final story): {storyline}\n"
                  f"Characters: {str(characters)}\n\n"
-                 "Please produce an engaging and coherent dialogue script."
+                 "Remember this is NOT just dialogue generation - this is the creation of the FINAL STORY that will be "
+                 "presented to readers. Produce a complete, engaging and seamless narrative as per the given style. "
+                 "If the style is 'novel', the narrator's voice should be prominent alongside character dialogues. "
+                 "If the style is 'drama', focus on the conversation between characters with detailed stage directions "
+                 "in square brackets [like this]. INCORPORATE ALL CONTENT - nothing should be left out."
                 )
             ])
             

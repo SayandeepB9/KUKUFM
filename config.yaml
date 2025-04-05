@@ -4,7 +4,7 @@ models:
   character_development: "gpt-4o-mini"
   story_splitting: "gpt-4o-mini"
   plot_selection: "gpt-4o-mini"
-  "story_enhancement": "gpt-4o-mini"
+  story_enhancement: "gpt-4o-mini"
   dialogue_generation: "gpt-4o-mini"
 
 # API configuration (these will be overridden by environment variables if present)

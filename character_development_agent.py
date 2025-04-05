@@ -66,6 +66,7 @@ class CharacterDevelopmentAgent:
         
         For each character, provide:
         1. Name: A culturally appropriate and meaningful name with Indian origins
+        
         2. Detailed Description:
            - Physical appearance (height, build, features, style of dress)
            - Voice and speech patterns (accent, tone, manner of speaking)
@@ -74,14 +75,18 @@ class CharacterDevelopmentAgent:
            - Cultural and social status
            - Relationships with other characters
         
-        3. Role Details:
-           - Primary role in the story (protagonist, antagonist, supporting, etc.)
-           - Specific episodes they appear in
-           - Their function in those episodes
-           - How they contribute to the plot
-           - Their relationships with other characters
-           - Their character arc (if any)
-        
+        3. DETAILED Role Description (this must be elaborated extensively):
+           - Primary function in the story (protagonist, antagonist, supporting, etc.)
+           - Character archetype and literary role (e.g., hero, mentor, trickster)
+           - Specific episodes they appear in and their function in those episodes
+           - How they drive plot development or subplots
+           - Their relationships with other characters and how those evolve
+           - Their character arc, transformation, or journey through the story
+           - Their narrative significance and thematic relevance
+           - Special skills or knowledge they bring to the story
+           - Moral or philosophical stance they represent
+           - Source of conflict or resolution they provide
+           
         Consider including characters that embody classical Indian archetypes:
         - The virtuous hero/heroine
         - The wise guru or mentor
