@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 import re
 import zipfile
 import shutil
+import asyncio
 
 # Import local components
 from outline_generation_agent import OutlineGenerator
@@ -17,6 +18,9 @@ from splitter_agent import StorySplitterAgent, Episode
 from enhancement import EpisodeLengtheningAgent
 from dialogue_generation_agent import DialogueAgent
 from translator_agent import TranslatorAgent
+from text_to_speech_agent import TextToSpeechAgent
+
+# Below the existing imports
 
 # Page configuration
 st.set_page_config(
@@ -204,12 +208,153 @@ def save_story(story_data, story_dir):
             
             # Add a separator between episodes
             if episode_num < len(sorted_episodes):
+            if episode_num < len(sorted_episodes):
                 f.write("---\n\n")
         
         # Add metadata at the end
         f.write(f"\n\n*Generated on {datetime.now().strftime('%Y-%m-%d')}*\n")
     
     return story_dir
+
+# Add this function with the other functions
+
+def generate_episode_audio(episode_number):
+    """Generate audio for a specific episode"""
+    if not hasattr(st.session_state, 'story_dir') or not st.session_state.story_dir:
+        st.error("Story directory not initialized. Cannot generate audio.")
+        return None
+        
+    if not hasattr(st.session_state, 'episodes'):
+        st.error("No episodes available. Generate episodes first.")
+        return None
+        
+    # Find the episode
+    episode = next((ep for ep in st.session_state.episodes if ep.number == episode_number), None)
+    if not episode:
+        st.error(f"Episode {episode_number} not found.")
+        return None
+    
+    # Get enhanced content if available
+    content = episode.content
+    enhanced_episode = st.session_state.enhanced_episodes.get(episode_number)
+    if enhanced_episode:
+        if hasattr(enhanced_episode, 'lengthened_content'):
+            content = enhanced_episode.lengthened_content
+        elif isinstance(enhanced_episode, dict) and 'lengthened_content' in enhanced_episode:
+            content = enhanced_episode['lengthened_content']
+    
+    # Initialize the TTS agent
+    try:
+        tts_agent = TextToSpeechAgent()
+        
+        with st.spinner(f"Generating audio for Episode {episode_number}..."):
+            # Generate audio
+            audio_path = tts_agent.generate_episode_audio(
+                content, 
+                episode_number, 
+                st.session_state.story_dir
+            )
+            
+        if audio_path and os.path.exists(audio_path):
+            st.success(f"Audio generated for Episode {episode_number}!")
+            return audio_path
+        else:
+            st.error("Failed to generate audio.")
+            return None
+            
+    except Exception as e:
+        st.error(f"Error generating audio: {str(e)}")
+        return None
+
+# Add this new function to play audio for an episode with streaming support
+def play_episode_audio(episode_number):
+    """Play or generate audio for a specific episode if not already generated"""
+    # Check if required directories and episodes exist
+    if not hasattr(st.session_state, 'story_dir') or not st.session_state.story_dir:
+        st.error("Story directory not initialized. Cannot play audio.")
+        return None
+        
+    if not hasattr(st.session_state, 'episodes'):
+        st.error("No episodes available. Generate episodes first.")
+        return None
+        
+    # Find the episode
+    episode = next((ep for ep in st.session_state.episodes if ep.number == episode_number), None)
+    if not episode:
+        st.error(f"Episode {episode_number} not found.")
+        return None
+    
+    # Check if audio file already exists
+    audio_dir = os.path.join(st.session_state.story_dir, "audio")
+    os.makedirs(audio_dir, exist_ok=True)  # Ensure audio directory exists
+    audio_path = os.path.join(audio_dir, f"episode_{episode_number}.mp3")
+    
+    # Get content to speak
+    content = episode.content
+    enhanced_episode = st.session_state.enhanced_episodes.get(episode_number)
+    if enhanced_episode:
+        if hasattr(enhanced_episode, 'lengthened_content'):
+            content = enhanced_episode.lengthened_content
+        elif isinstance(enhanced_episode, dict) and 'lengthened_content' in enhanced_episode:
+            content = enhanced_episode['lengthened_content']
+    
+    # Option to stream or play from file
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Generate and play from file
+        if os.path.exists(audio_path):
+            st.audio(audio_path)
+            st.success("Playing pre-generated audio file")
+            return audio_path
+        else:
+            # Generate audio and play
+            with st.spinner(f"Generating audio for Episode {episode_number}..."):
+                audio_path = generate_episode_audio(episode_number)
+            
+            if audio_path and os.path.exists(audio_path):
+                st.audio(audio_path)
+                st.success("Audio generated and playing")
+                return audio_path
+    
+    with col2:
+        # Stream directly (uses less storage but requires active internet)
+        stream_button = st.button("🔊 Stream Audio (Real-time)", key=f"stream_{episode_number}")
+        
+        if stream_button:
+            # Create a placeholder to show streaming status
+            stream_status = st.empty()
+            stream_status.info("Initializing audio stream...")
+            
+            try:
+                # Using the streaming function
+                tts_agent = TextToSpeechAgent()
+                
+                # Create and run the async function
+                async def stream_episode():
+                    stream_status.info("Streaming audio... (please wait)")
+                    result = await tts_agent.play_episode_audio(content)
+                    if result:
+                        stream_status.success("Audio streaming completed")
+                    else:
+                        stream_status.error("Failed to stream audio")
+                
+                # This creates a new event loop and runs the coroutine
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(stream_episode())
+                loop.close()
+                
+                return True
+                
+            except Exception as e:
+                st.error(f"Error streaming audio: {str(e)}")
+                return None
+    
+    # Fallback error message if neither option works
+    st.error("No audio could be generated. Please check your internet connection and API key.")
+    st.info("Make sure you have the OpenAI Python package installed: `pip install openai python-dotenv`")
+    return None
 
 # Initialize session state
 def init_session_state():
@@ -971,6 +1116,7 @@ def finalize_story(topic, story_type, target_languages=None):
         episodes_dir = os.path.join(story_dir, "episodes")
         dialogue_dir = os.path.join(story_dir, "dialogue")
         translations_dir = os.path.join(story_dir, "translations")
+        audio_dir = os.path.join(story_dir, "audio")
         
         if not os.path.exists(episodes_dir):
             os.makedirs(episodes_dir, exist_ok=True)
@@ -978,6 +1124,8 @@ def finalize_story(topic, story_type, target_languages=None):
             os.makedirs(dialogue_dir, exist_ok=True)
         if not os.path.exists(translations_dir):
             os.makedirs(translations_dir, exist_ok=True)
+        if not os.path.exists(audio_dir):
+            os.makedirs(audio_dir, exist_ok=True)
             
         # Set the session state after directory verification
         st.session_state.story_dir = story_dir
@@ -1001,7 +1149,8 @@ def finalize_story(topic, story_type, target_languages=None):
                 "number": episode.number,
                 "title": episode.title,
                 "content": episode.content,
-                "cliffhanger": episode.cliffhanger if hasattr(episode, 'cliffhanger') else ""
+                "cliffhanger": episode.cliffhanger if hasattr(episode, 'cliffhanger') else "",
+                "has_audio": False  # Default value, will be updated if audio is generated
             }
             serializable_episodes.append(serializable_episode)
         
@@ -1022,8 +1171,40 @@ def finalize_story(topic, story_type, target_languages=None):
             "enhanced_episodes": serializable_enhanced_episodes,
             "dialogue": serializable_dialogues,
             "generated_at": datetime.now().isoformat(),
-            "translations": [lang for lang, _ in st.session_state.translated_files] if hasattr(st.session_state, 'translated_files') and st.session_state.translated_files else []
+            "translations": [lang for lang in target_languages] if target_languages else [],
+            "audio_generated": generate_audio
         }
+        
+        # Generate audio for episodes if requested
+        if generate_audio:
+            try:
+                st.write("Generating audio for episodes...")
+                tts_agent = TextToSpeechAgent()
+                
+                for i, episode in enumerate(st.session_state.episodes):
+                    with st.spinner(f"Generating audio for Episode {episode.number}..."):
+                        # Get enhanced content if available
+                        content = episode.content
+                        enhanced_episode = serializable_enhanced_episodes.get(episode.number)
+                        if enhanced_episode and 'lengthened_content' in enhanced_episode:
+                            content = enhanced_episode['lengthened_content']
+                        
+                        # Generate audio
+                        audio_path = tts_agent.generate_episode_audio(
+                            content, 
+                            episode.number, 
+                            story_dir
+                        )
+                        
+                        # Update the serializable episode with audio info
+                        if audio_path and os.path.exists(audio_path):
+                            serializable_episodes[i]["has_audio"] = True
+                
+                # Update story data with audio info
+                story_data["episodes"] = serializable_episodes
+                
+            except Exception as e:
+                st.warning(f"Audio generation encountered an issue: {str(e)}")
         
         # Ensure the JSON file is saved correctly using a custom encoder for non-serializable objects
         class CustomEncoder(json.JSONEncoder):
@@ -1044,6 +1225,9 @@ def finalize_story(topic, story_type, target_languages=None):
         return story_data, story_dir
     except Exception as e:
         st.error(f"Error finalizing story: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+        return None, None# Main app function
         import traceback
         st.error(traceback.format_exc())
         return None, None
@@ -1222,6 +1406,10 @@ def main():
                 st.write(episode.content)
                 if episode.cliffhanger:
                     st.markdown(f"<p class='cliffhanger'>Cliffhanger: {episode.cliffhanger}</p>", unsafe_allow_html=True)
+
+                # Add audio button for each episode
+                if st.button(f"🔊 Listen to Episode {episode.number}", key=f"audio_ep4_{episode.number}"):
+                    play_episode_audio(episode.number)
         
         # Progress button
         if st.button("Enhance Episodes"):
@@ -1253,6 +1441,8 @@ def main():
                         st.write(enhanced.lengthened_content)
                     else:
                         st.write(enhanced.get('lengthened_content', 'Content not available'))
+                    if st.button(f"🔊 Listen to Episode {episode_num}", key=f"audio_ep5_{episode_num}"):
+                        play_episode_audio(episode_num)
         
         # Progress button
         if st.button("Generate Dialogue"):
@@ -1299,7 +1489,14 @@ def main():
                         else:
                             content = enhanced.get('lengthened_content', '')
                     
-                    st.markdown("<h3>Episode Content</h3>", unsafe_allow_html=True)
+                    # Add audio player at the top of each tab
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown("<h3>Episode Content</h3>", unsafe_allow_html=True)
+                    with col2:
+                        if st.button(f"🔊 Listen", key=f"audio_ep6_{episode_num}"):
+                            play_episode_audio(episode_num)
+                    
                     st.write(content)
                     
                     # Display dialogue
@@ -1351,6 +1548,18 @@ def main():
         
         st.success(f"Your story '{st.session_state.topic}' has been successfully generated!")
         
+        # Add a section for episode audio players
+        st.markdown("<h3>Listen to Episodes</h3>", unsafe_allow_html=True)
+        
+        # Create episode audio player buttons
+        cols = st.columns(min(3, len(st.session_state.episodes)))  # Up to 3 columns
+        
+        for i, episode in enumerate(sorted(st.session_state.episodes, key=lambda ep: ep.number)):
+            with cols[i % 3]:
+                st.markdown(f"**Episode {episode.number}: {episode.title}**")
+                if st.button(f"🔊 Play", key=f"audio_ep7_{episode.number}"):
+                    play_episode_audio(episode.number)
+
         # Show download options
         st.markdown("<h3>Download Options</h3>", unsafe_allow_html=True)
         
