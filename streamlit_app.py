@@ -208,7 +208,6 @@ def save_story(story_data, story_dir):
             
             # Add a separator between episodes
             if episode_num < len(sorted_episodes):
-            if episode_num < len(sorted_episodes):
                 f.write("---\n\n")
         
         # Add metadata at the end
@@ -1102,7 +1101,7 @@ def create_combined_story_for_translation():
     return combined_content
 
 # Function to finalize story
-def finalize_story(topic, story_type, target_languages=None):
+def finalize_story(topic, story_type, target_languages=None, generate_audio=False):
     try:
         # Create a unique directory for this story
         story_dir = create_story_directory(topic)
