@@ -18,12 +18,22 @@ class OutlineQuery(BaseModel):
 
 
 class OutlineGenerator:
-    def __init__(self, model, api_key):
-        self.llm = llm_api(model=model, api_key=api_key)
-        self.system_prompt = """You are an expert at generating detailed story outlines.
-        Given a topic, generate a list of the main events that will happen in the story.
-        For each story, you should provide at least 5-7 key events that form a coherent narrative.
-        Each event should be a brief description of a significant plot point or development.
+    def __init__(self, api_key=None, model_type="outline_generation"):
+        self.llm = llm_api(api_key=api_key, model_type=model_type)
+        self.system_prompt = """You are a master storyteller in the tradition of classical Indian literature.
+        Given a topic, generate a list of the main events that will happen in the story, drawing inspiration from rich Indian storytelling traditions like the Panchatantra, Jataka Tales, and ancient epics.
+        
+        For each story, you should provide 7-10 key events that form a coherent narrative with a clear beginning, middle, and end.
+        Each event should be a detailed description of a significant plot point or development, incorporating cultural elements and wisdom.
+        
+        Your outline should include:
+        - A compelling introduction that sets the scene and introduces the main themes
+        - A series of events that build tension and develop characters
+        - Challenges or conflicts that the characters must overcome
+        - Resolution of conflicts with moral or ethical insights
+        - A satisfying conclusion that delivers on the story's premise
+        
+        Create a narrative arc that follows classical storytelling with cultural authenticity and depth.
         FORMAT YOUR RESPONSE AS A LIST OF EVENTS ONLY."""
         self.structured_llm_outline = self.llm.with_structured_output(OutlineQuery)
         self.outline_prompt = ChatPromptTemplate.from_messages(
@@ -41,11 +51,53 @@ class OutlineGenerator:
             print(f"Event {i}: {event}")
         return outline.events
 
+    def refine_outline(self, topic, outline, feedback):
+        """
+        Refine an existing outline based on feedback.
+        
+        Args:
+            topic (str): The topic of the story
+            outline (List[str]): The existing outline events
+            feedback (str): Feedback to incorporate into the refined outline
+            
+        Returns:
+            List[str]: The refined list of events
+        """
+        refine_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", self.system_prompt),
+                ("human", """I have an outline for a story on the following topic: {topic}.
+                
+                Current outline:
+                {outline}
+                
+                Feedback on the outline:
+                {feedback}
+                
+                Please provide a refined outline that incorporates this feedback. Return a list of events in the 'events' field."""),
+            ]
+        )
+        
+        refine_chain = refine_prompt | self.structured_llm_outline
+        
+        # Format the outline as a numbered list for the prompt
+        formatted_outline = "\n".join([f"{i+1}. {event}" for i, event in enumerate(outline)])
+        
+        refined_outline = refine_chain.invoke({
+            "topic": topic,
+            "outline": formatted_outline,
+            "feedback": feedback
+        })
+        
+        print("---REFINED STORY OUTLINE---")
+        for i, event in enumerate(refined_outline.events, 1):
+            print(f"Event {i}: {event}")
+            
+        return refined_outline.events
+
 
 if __name__ == "__main__":
-    model = "llama-3.1-8b-instant"  
-    api_key = "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" 
-    generator = OutlineGenerator(model=model, api_key=api_key)
+    generator = OutlineGenerator()
     topic = "A horror story in a haunted hotel"
     events = generator.generate_outline(topic)
     print("Generated Outline:", events)

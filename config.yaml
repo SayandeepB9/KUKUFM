@@ -1,0 +1,21 @@
+models:
+  default: "gpt-4o-mini"
+  outline_generation: "gpt-4o-mini"
+  character_development: "gpt-4o-mini"
+  story_splitting: "gpt-4o-mini"
+  plot_selection: "gpt-4o-mini"
+  story_enhancement: "gpt-4o-mini"
+  dialogue_generation: "gpt-4o-mini"
+
+# API configuration (these will be overridden by environment variables if present)
+api_keys:
+  groq: ""  # Will use GROQ_API_KEY from .env
+  openai: "" # Will use OPENAI_API_KEY from .env
+  
+# Default provider to use when both API keys are available
+preferred_provider: "groq"  # Options: "groq", "openai"
+  
+# General settings
+settings:
+  temperature: 0.7
+  streaming: false

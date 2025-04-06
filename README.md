@@ -1,65 +1,53 @@
-# KUKUFM Story Generation Framework
+# KUKUFM AI Story Generator
 
-A comprehensive framework for AI-powered story generation, character development, and plot enhancement.
+An AI-powered platform that generates engaging stories with episodic structure, character development, and dialogue, with support for human feedback and multilingual output.
 
 ## Overview
 
-This project provides a set of tools for creative writing using Large Language Models (LLMs). It includes:
+This project leverages Large Language Models (LLMs) to create compelling narratives through a pipeline of specialized agents that handle different aspects of storytelling. The system produces complete stories with episodes, characters, and realistic dialogue, allowing for human feedback and translations to multiple languages.
 
-- Story outline generation
-- Character development
-- Plot options and twists
-- Integrated LLM API support for both OpenAI and Groq models
+## Features
 
-## Setup
+- **Topic-Based Story Generation**: Create stories based on any topic or theme
+- **Interactive Outline Refinement**: Provide feedback to refine story outlines
+- **Character Development**: Automatic generation of detailed characters with descriptions 
+- **Episodic Structure**: Split stories into cohesive episodes with cliffhangers
+- **Enhanced Content**: Expand episodes with detailed narratives and engagement points
+- **Dialogue Generation**: Create realistic dialogue between characters
+- **Multilingual Support**: Translate stories to different languages
+- **Human Feedback Loop**: Iteratively improve outlines based on human input
 
-1. Clone the repository
-2. Install requirements:
-   ```bash
+## Components2
+
+The system consists of several specialized agents:
+
+- **OutlineGenerator**: Creates the initial story outline and refines it based on feedback
+- **CharacterDevelopmentAgent**: Develops detailed characters for the story
+- **StoryElementLibrary**: Suggests plot elements and story devices
+- **StorySplitterAgent**: Divides the narrative into coherent episodes
+- **EpisodeLengtheningAgent**: Expands episode outlines into detailed content
+- **DialogueAgent**: Generates natural dialogue between characters
+- **TranslatorAgent**: Translates stories to different languages
+
+## Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/kukufm-story-generator.git
+   cd kukufm-story-generator
+   ```
+
+2. Install dependencies:
+   ```
    pip install -r requirements.txt
    ```
-3. Create a `.env` file with your API keys:
+
+3. Set up your environment variables in a `.env` file:
    ```
-   OPENAI_API_KEY=your_openai_api_key_here
-   GROQ_API_KEY=your_groq_api_key_here
+   OPENAI_API_KEY=your_openai_api_key
+   OPENAI_API_MODEL=gpt-4o-mini  # or your preferred model
    ```
 
 ## Usage
 
-### LLM API
-
-The `llm_api.py` module provides a unified interface to both OpenAI and Groq models:
-
-```python
-from llm_api import llm_api
-
-# Initialize an OpenAI model
-openai_llm = llm_api(model="gpt-4o-mini")
-
-# Initialize a Groq model
-groq_llm = llm_api(model="llama3-70b-8192")
-```
-
-### Story Generation
-
-```python
-from outline_generation_agent import OutlineGenerator
-from character_development_agent import CharacterDevelopmentAgent
-from plot_selector import StoryElementLibrary
-
-# Generate a story outline
-generator = OutlineGenerator(model="llama3-70b-8192", api_key=None)
-outline = generator.generate_outline("A mystery in an ancient temple")
-
-# Generate characters for the story
-character_agent = CharacterDevelopmentAgent(model="llama3-70b-8192", api_key=None)
-characters = character_agent.generate_characters("A mystery in an ancient temple")
-
-# Generate plot options
-library = StoryElementLibrary(model_name="llama3-70b-8192")
-plot_options = library.generate_plot_options(outline, "mystery")
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Run the main script with a topic to generate a story:

@@ -2,3 +2,11 @@ langchain>=0.1.0
 langchain-groq>=0.1.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
+langchain_openai
+pyyaml
+openai
+tqdm
+streamlit>=1.32.0
+matplotlib
+numpy
+pandas
