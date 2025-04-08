@@ -1488,15 +1488,15 @@ def main():
                         else:
                             content = enhanced.get('lengthened_content', '')
                     
-                    # Add audio player at the top of each tab
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.markdown("<h3>Episode Content</h3>", unsafe_allow_html=True)
-                    with col2:
-                        if st.button(f"🔊 Listen", key=f"audio_ep6_{episode_num}"):
-                            play_episode_audio(episode_num)
+                    # # Add audio player at the top of each tab
+                    # col1, col2 = st.columns([3, 1])
+                    # with col1:
+                    #     st.markdown("<h3>Episode Content</h3>", unsafe_allow_html=True)
+                    # with col2:
+                    #     if st.button(f"🔊 Listen", key=f"audio_ep6_{episode_num}"):
+                    #         play_episode_audio(episode_num)
                     
-                    st.write(content)
+                    # st.write(content)
                     
                     # Display dialogue
                     dialogue = st.session_state.dialogues.get(episode_num, "")
